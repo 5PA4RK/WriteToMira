@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,32 +7,126 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Security overlay styling */
+        #securityOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-primary, #1a1a2e);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 20px;
+            color: white;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #4cc9f0;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Security fixes for modals */
+        body.modal-open {
+            overflow: hidden !important;
+            height: 100vh !important;
+        }
+        
+        .connection-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.98) !important;
+            backdrop-filter: blur(10px) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
+            z-index: 10000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .connection-modal.active {
+            display: flex !important;
+        }
+        
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10001;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .image-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 10002;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        /* Main content visibility control */
+        #mainContent {
+            display: none;
+        }
+        
+        #mainContent.connected {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Hide sensitive elements when disconnected */
+        body:not(.connected) .sensitive-data {
+            display: none !important;
+        }
+        
+        /* Prevent background scroll on mobile */
+        .connection-modal.active ~ * {
+            overflow: hidden !important;
+        }
+    </style>
 </head>
-<body>
-<!-- Add this at the top of your body -->
-<div id="securityOverlay" style="
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--bg-primary);
-    z-index: 9999;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    gap: 20px;
-">
-    <div class="spinner"></div>
-    <div>Loading secure chat...</div>
-</div>
+<body class="disconnected">
+    <!-- Security Overlay - Always on top initially -->
+    <div id="securityOverlay">
+        <div class="spinner"></div>
+        <div>Initializing secure connection...</div>
+    </div>
 
     <!-- Connection Modal -->
-    <div id="connectionModal" class="connection-modal">
+    <div id="connectionModal" class="connection-modal active">
         <div class="modal-content">
             <div class="modal-header">
-                <h2><i class="fas fa-user-shield"></i>Write To Mira - Secure Chat</h2>
+                <h2><i class="fas fa-user-shield"></i> Write To Mira - Secure Chat</h2>
             </div>
             <div class="modal-body">
                 <div class="login-form">
@@ -49,7 +142,7 @@
                         <label for="passwordInput"><i class="fas fa-lock"></i> Password:</label>
                         <input type="password" id="passwordInput" class="form-input" placeholder="Enter password">
                         <div class="password-hint" id="passwordHint">
-                            
+                            <!-- Password hints will go here -->
                         </div>
                     </div>
                     
@@ -60,13 +153,17 @@
                     <button id="connectBtn" class="btn" style="width: 100%; margin-top: 20px;">
                         <i class="fas fa-plug"></i> Connect
                     </button>
+                    
+                    <div class="security-notice" style="margin-top: 20px; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 5px; font-size: 12px; text-align: center;">
+                        <i class="fas fa-shield-alt"></i> Your connection is secure. No data is accessible until authentication.
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Pending Guests Modal -->
-    <div id="pendingGuestsModal" class="modal-overlay" style="display: none;">
+    <div id="pendingGuestsModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
                 <h2><i class="fas fa-user-clock"></i> Pending Guests</h2>
@@ -86,119 +183,143 @@
     </div>
 
     <!-- Image Modal -->
-    <div id="imageModal" class="image-modal-overlay" style="display: none;">
+    <div id="imageModal" class="image-modal-overlay">
         <div class="image-modal-content">
             <img id="fullSizeImage" src="" alt="Full size image">
         </div>
     </div>
 
-    <header>
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">
-                    <i class="fas fa-comment-alt"></i>
-                    <h1>Write To Mira</h1>
-                </div>
-                <div class="header-controls">
-                    <div class="sound-control" id="soundControl">
-                        <i class="fas fa-volume-up"></i>
-                        <span>Sound On</span>
+    <!-- Main Content Container - Hidden until connected -->
+    <div id="mainContent">
+        <header>
+            <div class="container">
+                <div class="header-content">
+                    <div class="logo">
+                        <i class="fas fa-comment-alt"></i>
+                        <h1>Write To Mira</h1>
                     </div>
-                    <div class="user-status">
-                        <div id="statusIndicator" class="status-indicator offline"></div>
-                        <span id="userRoleDisplay">Disconnected</span>
+                    <div class="header-controls">
+                        <div class="sound-control" id="soundControl">
+                            <i class="fas fa-volume-up"></i>
+                            <span>Sound On</span>
+                        </div>
+                        <div class="user-status">
+                            <div id="statusIndicator" class="status-indicator offline"></div>
+                            <span id="userRoleDisplay">Disconnected</span>
+                        </div>
+                        <button id="pendingGuestsBtn" class="btn btn-secondary" style="display: none;">
+                            <i class="fas fa-user-clock"></i> <span id="pendingCount">0</span> Pending
+                        </button>
+                        <button id="logoutBtn" class="btn btn-secondary" style="display: none;">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
                     </div>
-                    <button id="pendingGuestsBtn" class="btn btn-secondary" style="display: none;">
-                        <i class="fas fa-user-clock"></i> <span id="pendingCount">0</span> Pending
-                    </button>
-                    <button id="logoutBtn" class="btn btn-secondary" style="display: none;">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </button>
                 </div>
             </div>
-        </div>
-    </header>
+        </header>
 
-    <div class="container">
-        <div class="main-app">
-            <!-- Chat Section -->
-            <section class="chat-section">
-                <div class="section-header">
-                    <h2 id="chatTitle"><i class="fas fa-comments"></i> Active Chat</h2>
-                    <div class="chat-mode-indicator" id="chatModeIndicator" style="display: none;">
-                        <i class="fas fa-history"></i>
-                        <span>Viewing Historical Chat</span>
-                        <button id="returnToActiveBtn" class="btn btn-small btn-success">
-                            <i class="fas fa-arrow-left"></i> Return to Active
-                        </button>
-                    </div>
-                    <div class="chat-actions">
-                        <button id="clearChatBtn" class="btn btn-danger btn-small">
-                            <i class="fas fa-trash-alt"></i> Clear
-                        </button>
-                    </div>
-                </div>
-                <div class="chat-messages" id="chatMessages">
-                    <!-- Messages will appear here -->
-                    <div class="message received">
-                        <div class="message-sender">System</div>
-                        <div class="message-content">
-                            <div class="message-text">Welcome to WriteToMira! Connect to start chatting.</div>
-                            <div class="message-time">Just now</div>
+        <div class="container">
+            <div class="main-app">
+                <!-- Chat Section -->
+                <section class="chat-section">
+                    <div class="section-header">
+                        <h2 id="chatTitle"><i class="fas fa-comments"></i> Active Chat</h2>
+                        <div class="chat-mode-indicator" id="chatModeIndicator" style="display: none;">
+                            <i class="fas fa-history"></i>
+                            <span>Viewing Historical Chat</span>
+                            <button id="returnToActiveBtn" class="btn btn-small btn-success">
+                                <i class="fas fa-arrow-left"></i> Return to Active
+                            </button>
+                        </div>
+                        <div class="chat-actions">
+                            <button id="clearChatBtn" class="btn btn-danger btn-small">
+                                <i class="fas fa-trash-alt"></i> Clear
+                            </button>
                         </div>
                     </div>
-                </div>
-                <div id="typingIndicator" class="typing-indicator">
-                    <i class="fas fa-pencil-alt"></i> <span id="typingUser">User</span> is typing...
-                </div>
-                <div class="chat-input-area">
-                    <div class="chat-input-wrapper">
-                        <textarea id="messageInput" class="message-input" placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)" disabled></textarea>
-                        <div class="input-actions">
-                            <label for="imageUpload" class="file-input-label">
-                                <i class="fas fa-image"></i>
-                                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
-                            </label>
-                            <button id="emojiBtn" class="file-input-label">
-                                <i class="fas fa-smile"></i>
-                            </button>
-                            <div class="emoji-picker" id="emojiPicker">
-                                <!-- Emojis will be populated by JavaScript -->
+                    <div class="chat-messages" id="chatMessages">
+                        <!-- Messages will appear here -->
+                        <div class="message received">
+                            <div class="message-sender">System</div>
+                            <div class="message-content">
+                                <div class="message-text">Welcome to WriteToMira! Please connect to start chatting.</div>
+                                <div class="message-time">Just now</div>
                             </div>
                         </div>
                     </div>
-                    <button id="sendMessageBtn" class="btn" disabled>
-                        <i class="fas fa-paper-plane"></i> Send
-                    </button>
-                </div>
-            </section>
+                    <div id="typingIndicator" class="typing-indicator">
+                        <i class="fas fa-pencil-alt"></i> <span id="typingUser">User</span> is typing...
+                    </div>
+                    <div class="chat-input-area">
+                        <div class="chat-input-wrapper">
+                            <textarea id="messageInput" class="message-input" placeholder="Connect to start chatting..." disabled></textarea>
+                            <div class="input-actions">
+                                <label for="imageUpload" class="file-input-label">
+                                    <i class="fas fa-image"></i>
+                                    <input type="file" id="imageUpload" accept="image/*" style="display: none;" disabled>
+                                </label>
+                                <button id="emojiBtn" class="file-input-label" disabled>
+                                    <i class="fas fa-smile"></i>
+                                </button>
+                                <div class="emoji-picker" id="emojiPicker">
+                                    <!-- Emojis will be populated by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                        <button id="sendMessageBtn" class="btn" disabled>
+                            <i class="fas fa-paper-plane"></i> Send
+                        </button>
+                    </div>
+                </section>
 
-            <!-- History Section -->
-            <div id="historySection" class="hidden-section">
-                <div class="section-header">
-                    <h2><i class="fas fa-history"></i> Chat Sessions</h2>
-                    <button id="refreshHistoryBtn" class="btn btn-small">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
+                <!-- History Section - Hidden by default -->
+                <div id="historySection" class="hidden-section" style="display: none;">
+                    <div class="section-header">
+                        <h2><i class="fas fa-history"></i> Chat Sessions</h2>
+                        <button id="refreshHistoryBtn" class="btn btn-small">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="history-cards" id="historyCards">
+                        <!-- Session cards will be populated here -->
+                    </div>
                 </div>
-                <div class="history-cards" id="historyCards">
-                    <!-- Session cards will be populated here -->
-                </div>
-            </section>
+            </div>
         </div>
+
+        <footer>
+            <div class="container">
+                <p>WriteToMira &copy; 2025 - Secure Communication Platform | End-to-End Encrypted</p>
+            </div>
+        </footer>
     </div>
-
-    <footer>
-        <div class="container">
-            <p>WriteToMira &copy; 2025 - Secure Communication Platform | End-to-End Encrypted</p>
-        </div>
-    </footer>
 
     <!-- Audio for message notification -->
     <audio id="messageSound" preload="auto">
         <source src="https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3" type="audio/mpeg">
     </audio>
 
+    <script>
+        // Security initialization
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hide security overlay after a brief moment
+            setTimeout(() => {
+                document.getElementById('securityOverlay').style.display = 'none';
+            }, 500);
+            
+            // Add security event listeners
+            document.addEventListener('touchmove', function(e) {
+                const modal = document.getElementById('connectionModal');
+                if (modal.classList.contains('active')) {
+                    // Prevent scrolling behind modal on mobile
+                    if (e.target.closest('.modal-content') === null) {
+                        e.preventDefault();
+                    }
+                }
+            }, { passive: false });
+        });
+    </script>
+    
     <script src="app.js"></script>
 </body>
 </html>
