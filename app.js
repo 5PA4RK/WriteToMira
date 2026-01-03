@@ -623,7 +623,8 @@ function updateUIForPendingGuest() {
 }
 
 // Update UI after connection
-function updateUIAfterConnection() {
+// Update UI after connection
+async function updateUIAfterConnection() {
     statusIndicator.className = 'status-indicator';
     statusIndicator.classList.add('online');
     userRoleDisplay.textContent = `${appState.userName} (Connected)`;
@@ -646,10 +647,62 @@ function updateUIAfterConnection() {
         }
     });
     
-    // NEW: Hide history section for guests
+    // SECURITY FIX: Remove history section completely for guests
     const historySection = document.getElementById('historySection');
+    const historyCheckbox = document.getElementById('historyCheckbox');
+    
     if (historySection) {
-        historySection.style.display = appState.isHost ? 'block' : 'none';
+        if (appState.isHost) {
+            // For hosts: Show and load history section
+            historySection.classList.add('history-visible');
+            historySection.style.display = 'block';
+            
+            // Load chat sessions ONLY for hosts after authentication
+            setTimeout(() => loadChatSessions(), 100);
+        } else {
+            // For guests: COMPLETELY REMOVE history section from DOM
+            historySection.remove();
+            
+            // Also remove any checkbox that might control it
+            if (historyCheckbox) {
+                historyCheckbox.remove();
+            }
+        }
+    }
+    
+    // Hide security overlay if it exists
+    const securityOverlay = document.getElementById('securityOverlay');
+    if (securityOverlay) {
+        securityOverlay.style.display = 'none';
+    }
+    
+    // Clear any leftover data from previous sessions
+    if (!appState.isHost) {
+        // Clear any cached history data for guests
+        const historyCards = document.getElementById('historyCards');
+        if (historyCards) {
+            historyCards.innerHTML = '';
+        }
+        
+        // Hide any history toggle buttons
+        const historyToggleBtns = document.querySelectorAll('[onclick*="history"], [onclick*="History"]');
+        historyToggleBtns.forEach(btn => {
+            btn.style.display = 'none';
+        });
+    }
+    
+    // Update pending guests button visibility
+    if (appState.isHost) {
+        pendingGuestsBtn.style.display = 'flex';
+        loadPendingGuests();
+        setupPendingGuestsSubscription();
+    } else {
+        pendingGuestsBtn.style.display = 'none';
+    }
+    
+    // Reset any viewing history state
+    if (appState.isViewingHistory) {
+        returnToActiveChat();
     }
 }
 
@@ -1253,87 +1306,312 @@ async function denyGuest(index) {
 }
 
 // Load chat sessions for history panel
+
 async function loadChatSessions() {
+    console.log("loadChatSessions called - Security check start");
+    
+    // ============ SECURITY CHECK 1: Verify user is connected ============
+    if (!appState.isConnected) {
+        console.warn("Security: User is not connected. Blocking history access.");
+        if (historyCards) {
+            historyCards.innerHTML = `
+                <div class="security-message">
+                    <i class="fas fa-shield-alt"></i>
+                    <h3>Access Restricted</h3>
+                    <p>You must be connected to view chat history.</p>
+                    <button class="btn btn-primary" onclick="showConnectionModal()">
+                        Connect Now
+                    </button>
+                </div>
+            `;
+        }
+        return;
+    }
+    
+    // ============ SECURITY CHECK 2: Verify user is host ============
+    if (!appState.isHost) {
+        console.warn("Security: User is not host. Blocking history access.");
+        if (historyCards) {
+            historyCards.innerHTML = `
+                <div class="security-message">
+                    <i class="fas fa-user-shield"></i>
+                    <h3>Host Access Required</h3>
+                    <p>Only hosts can view chat history.</p>
+                </div>
+            `;
+        }
+        return;
+    }
+    
+    // ============ SECURITY CHECK 3: Verify DOM elements exist ============
+    const historySection = document.getElementById('historySection');
+    if (!historySection) {
+        console.error("Security: History section not found in DOM.");
+        return;
+    }
+    
+    if (!historyCards) {
+        console.error("Security: History cards container not found.");
+        return;
+    }
+    
+    // ============ SECURITY CHECK 4: Verify history section should be visible ============
+    if (historySection.style.display === 'none' || 
+        historySection.classList.contains('hidden')) {
+        console.log("Security: History section is hidden. Skipping data load.");
+        return;
+    }
+    
+    // ============ SECURITY CHECK 5: Verify user ID exists ============
+    if (!appState.userId || appState.userId === "Guest") {
+        console.error("Security: Invalid user ID detected.");
+        if (historyCards) {
+            historyCards.innerHTML = `
+                <div class="security-message error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Authentication Error</h3>
+                    <p>Your session appears to be invalid. Please reconnect.</p>
+                </div>
+            `;
+        }
+        return;
+    }
+    
+    console.log("Security checks passed. Loading sessions for host:", appState.userId);
+    
+    // Show loading state
+    historyCards.innerHTML = `
+        <div class="loading-sessions">
+            <div class="spinner"></div>
+            <p>Loading secure chat history...</p>
+        </div>
+    `;
+    
     try {
+        // ============ SECURE SERVER-SIDE QUERY ============
+        console.log("Querying sessions for host ID:", appState.userId);
+        
         const { data: sessions, error } = await supabaseClient
             .from('sessions')
-            .select('*')
-            .order('created_at', { ascending: false });
+            .select(`
+                *,
+                messages: messages(count)
+            `)
+            .eq('host_id', appState.userId)  // CRITICAL: Server-side filtering
+            .order('created_at', { ascending: false })
+            .limit(50);  // Limit to prevent excessive data loading
         
         if (error) {
-            console.error("Error loading sessions:", error);
-            historyCards.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Could not load sessions</div>';
+            console.error("Database error:", error);
+            throw new Error(`Database error: ${error.message}`);
+        }
+        
+        console.log(`Server returned ${sessions?.length || 0} sessions`);
+        
+        // ============ SECURITY CHECK 6: Validate server response ============
+        if (!sessions || !Array.isArray(sessions)) {
+            console.error("Security: Invalid response format from server");
+            historyCards.innerHTML = `
+                <div class="security-message error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Data Validation Error</h3>
+                    <p>Received invalid data from server.</p>
+                </div>
+            `;
             return;
         }
         
+        // ============ SECURITY CHECK 7: Double-check ownership ============
+        const validatedSessions = sessions.filter(session => {
+            if (!session || typeof session !== 'object') return false;
+            if (!session.session_id) return false;
+            
+            // Critical: Verify each session belongs to current user
+            const isOwned = session.host_id === appState.userId;
+            if (!isOwned) {
+                console.warn(`Security: Session ${session.session_id} does not belong to current user. Filtered out.`);
+            }
+            return isOwned;
+        });
+        
+        console.log(`After validation: ${validatedSessions.length} sessions`);
+        
+        // ============ RENDER SESSIONS ============
+        if (validatedSessions.length === 0) {
+            historyCards.innerHTML = `
+                <div class="no-sessions">
+                    <i class="fas fa-history"></i>
+                    <h3>No Chat Sessions</h3>
+                    <p>You haven't hosted any chat sessions yet.</p>
+                    <p class="hint">Start a session as host to see history here.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Clear previous content
         historyCards.innerHTML = '';
         
-        sessions.forEach(session => {
+        // Create session cards
+        validatedSessions.forEach(session => {
             const isActive = session.session_id === appState.currentSessionId && session.is_active;
+            const messageCount = session.messages?.[0]?.count || 0;
+            const hasGuest = !!session.guest_id;
+            
             const card = document.createElement('div');
             card.className = 'session-card';
             if (isActive) {
                 card.classList.add('active');
             }
             
-            card.innerHTML = `
-            <div class="session-card-header">
-                <div class="session-id">${session.session_id.substring(0, 10)}...</div>
-                ${isActive ? '<div class="session-active-badge">Active Now</div>' : ''}
-            </div>
-            <div class="session-info">
-                <div class="session-info-item">
-                    <div class="session-info-row">
-                        <span class="session-info-label">Host:</span>
-                        <span class="session-info-value">${session.host_name || 'Unknown'}</span>
-                    </div>
-                    <div class="session-info-row">
-                        <span class="session-info-label">Host IP:</span>
-                        <span class="session-info-value">${session.host_ip || 'N/A'}</span>
-                    </div>
-                </div>
-                <div class="session-info-item">
-                    <div class="session-info-row">
-                        <span class="session-info-label">Guest:</span>
-                        <span class="session-info-value">${session.guest_name || 'None'}</span>
-                    </div>
-                    <div class="session-info-row">
-                        <span class="session-info-label">Guest IP:</span>
-                        <span class="session-info-value">${session.guest_ip || 'N/A'}</span>
-                    </div>
-                </div>
-                <div class="session-info-item">
-                    <span class="session-info-label">Started:</span>
-                    <span class="session-info-value">${new Date(session.created_at).toLocaleDateString()}</span>
-                </div>
-            </div>
-            <div class="session-actions">
-                <button class="btn btn-secondary btn-small" onclick="viewSessionHistory('${session.session_id}')">
-                    <i class="fas fa-eye"></i> View
-                </button>
-                <button class="btn btn-success btn-small" onclick="downloadSession('${session.session_id}')">
-                    <i class="fas fa-download"></i> Download
-                </button>
-                ${appState.isHost ? `
-                <button class="btn btn-danger btn-small" onclick="deleteSession('${session.session_id}')">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-                ` : ''}
-            </div>
-        `;
+            // ============ SECURE RENDERING: Sanitize data ============
+            const formatIP = (ip) => {
+                if (!ip || ip === "Unknown") return "N/A";
+                // For privacy, only show partial IP
+                return ip.split('.').slice(0, 2).join('.') + '.xxx.xxx';
+            };
             
+            card.innerHTML = `
+                <div class="session-card-header">
+                    <div class="session-id">
+                        <i class="fas fa-hashtag"></i>
+                        ${session.session_id.substring(0, 8)}...
+                    </div>
+                    <div class="session-status">
+                        ${isActive ? 
+                            '<span class="status-badge active"><i class="fas fa-circle"></i> Active</span>' : 
+                            `<span class="status-badge ended">
+                                <i class="fas fa-clock"></i> ${session.ended_at ? 
+                                    new Date(session.ended_at).toLocaleDateString() : 
+                                    'Ended'}
+                            </span>`
+                        }
+                    </div>
+                </div>
+                
+                <div class="session-info">
+                    <div class="session-info-item">
+                        <div class="session-info-row">
+                            <span class="session-info-label">
+                                <i class="fas fa-user"></i> Host:
+                            </span>
+                            <span class="session-info-value">${escapeHtml(session.host_name || 'You')}</span>
+                        </div>
+                        <div class="session-info-row">
+                            <span class="session-info-label">
+                                <i class="fas fa-network-wired"></i> Host IP:
+                            </span>
+                            <span class="session-info-value">${formatIP(session.host_ip)}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="session-info-item">
+                        <div class="session-info-row">
+                            <span class="session-info-label">
+                                <i class="fas fa-user-friends"></i> Guest:
+                            </span>
+                            <span class="session-info-value">
+                                ${hasGuest ? 
+                                    escapeHtml(session.guest_name || 'Guest') : 
+                                    '<span class="no-guest">No guest</span>'
+                                }
+                            </span>
+                        </div>
+                        ${hasGuest ? `
+                        <div class="session-info-row">
+                            <span class="session-info-label">
+                                <i class="fas fa-network-wired"></i> Guest IP:
+                            </span>
+                            <span class="session-info-value">${formatIP(session.guest_ip)}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    
+                    <div class="session-meta">
+                        <div class="session-meta-item">
+                            <i class="fas fa-calendar"></i>
+                            <span>${new Date(session.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div class="session-meta-item">
+                            <i class="fas fa-clock"></i>
+                            <span>${new Date(session.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <div class="session-meta-item">
+                            <i class="fas fa-comment"></i>
+                            <span>${messageCount} messages</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="session-actions">
+                    <button class="btn btn-secondary btn-small" 
+                            onclick="viewSessionHistory('${escapeHtml(session.session_id)}')"
+                            title="View chat history">
+                        <i class="fas fa-eye"></i> View
+                    </button>
+                    <button class="btn btn-success btn-small" 
+                            onclick="downloadSession('${escapeHtml(session.session_id)}')"
+                            title="Download session data">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                    ${appState.isHost ? `
+                    <button class="btn btn-danger btn-small" 
+                            onclick="deleteSession('${escapeHtml(session.session_id)}')"
+                            title="Delete session permanently">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                    ` : ''}
+                </div>
+            `;
+            
+            // Add click event for the entire card (excluding buttons)
             card.addEventListener('click', (e) => {
-                if (!e.target.closest('.session-actions')) {
+                if (!e.target.closest('.session-actions') && 
+                    !e.target.closest('.session-status') &&
+                    !e.target.closest('.session-meta-item')) {
                     viewSessionHistory(session.session_id);
                 }
             });
             
             historyCards.appendChild(card);
         });
+        
+        console.log("Sessions loaded successfully");
+        
     } catch (error) {
-        console.error("Error loading sessions:", error);
-        historyCards.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Error loading sessions</div>';
+        console.error("Error loading chat sessions:", error);
+        
+        // Show error message without revealing details
+        historyCards.innerHTML = `
+            <div class="security-message error">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Unable to Load History</h3>
+                <p>There was an error loading chat sessions.</p>
+                <p class="hint">Please try again or contact support if the issue persists.</p>
+                <button class="btn btn-primary" onclick="loadChatSessions()">
+                    <i class="fas fa-redo"></i> Retry
+                </button>
+            </div>
+        `;
     }
+}
+
+// Helper function to escape HTML for security
+function escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// Helper function to show connection modal
+function showConnectionModal() {
+    connectionModal.style.display = 'flex';
+    document.getElementById('userSelect').value = 'host';
+    document.getElementById('passwordInput').focus();
 }
 
 // View session history
