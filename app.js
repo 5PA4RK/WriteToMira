@@ -192,11 +192,10 @@ async function handleConnect() {
     
     try {
         // Authenticate user
-        const { data, error } = await supabaseClient
-            .rpc('authenticate_user', {
-                p_username: selectedRole,
-                p_password: password
-            });
+        const { data: { session }, error } = await supabaseClient.auth.signInWithPassword({
+            email: email,
+            password: password
+          });
         
         if (error) {
             console.error("Authentication error:", error);
