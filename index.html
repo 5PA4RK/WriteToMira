@@ -10,6 +10,25 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Add this at the top of your body -->
+<div id="securityOverlay" style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-primary);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 20px;
+">
+    <div class="spinner"></div>
+    <div>Loading secure chat...</div>
+</div>
+
     <!-- Connection Modal -->
     <div id="connectionModal" class="connection-modal">
         <div class="modal-content">
@@ -155,7 +174,7 @@
             </section>
 
             <!-- History Section -->
-            <section class="history-section" id="historySection">
+            <div id="historySection" class="hidden-section">
                 <div class="section-header">
                     <h2><i class="fas fa-history"></i> Chat Sessions</h2>
                     <button id="refreshHistoryBtn" class="btn btn-small">
