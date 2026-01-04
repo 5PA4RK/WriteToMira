@@ -181,7 +181,7 @@ function setupEventListeners() {
         document.getElementById('passwordError').style.display = 'none';
         // Show/hide guest name input based on role
         if (this.value === 'guest') {
-            guestNameGroup.style.display = 'flex';
+            guestNameGroup.style.display = 'flex'; // Make sure this variable is defined
         } else {
             guestNameGroup.style.display = 'none';
         }
