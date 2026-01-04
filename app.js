@@ -119,6 +119,7 @@ function clearSensitiveData() {
 }
 
 // Initialize the app
+// Initialize the app
 async function initApp() {
     // Initially hide main content and show modal
     const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
@@ -164,6 +165,14 @@ async function initApp() {
     // Set up event listeners
     setupEventListeners();
     
+    // Initialize guest name field visibility - ADD THIS
+    const userSelect = document.getElementById('userSelect');
+    if (userSelect.value === 'guest') {
+        guestNameGroup.style.display = 'flex';
+    } else {
+        guestNameGroup.style.display = 'none';
+    }
+    
     // Load emojis
     populateEmojis();
     
@@ -171,6 +180,7 @@ async function initApp() {
     loadChatSessions();
 }
 
+// Set up all event listeners
 // Set up all event listeners
 function setupEventListeners() {
     // Connection modal
@@ -181,7 +191,17 @@ function setupEventListeners() {
         document.getElementById('passwordError').style.display = 'none';
         // Show/hide guest name input based on role
         if (this.value === 'guest') {
-            guestNameGroup.style.display = 'flex'; // Make sure this variable is defined
+            guestNameGroup.style.display = 'flex';
+            // Trigger animation by resetting display
+            setTimeout(() => {
+                guestNameGroup.style.opacity = '0';
+                guestNameGroup.style.transform = 'translateY(-10px)';
+                setTimeout(() => {
+                    guestNameGroup.style.opacity = '1';
+                    guestNameGroup.style.transform = 'translateY(0)';
+                    guestNameGroup.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                }, 10);
+            }, 10);
         } else {
             guestNameGroup.style.display = 'none';
         }
