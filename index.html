@@ -3,47 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WriteToMe - Secure Chat</title>
+    <title>WriteToMira - Secure Chat</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <!-- Connection Modal -->
-    <div id="connectionModal" class="connection-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-user-shield"></i> WriteToMira - Secure Connection</h2>
-            </div>
-            <div class="modal-body">
-                <div class="login-form">
-                    <div class="form-group">
-                        <label for="userSelect"><i class="fas fa-user"></i> Select Role:</label>
-                        <select id="userSelect" class="form-input">
-                            <option value="guest">Guest</option>
-                            <option value="host">Host</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="passwordInput"><i class="fas fa-lock"></i> Password:</label>
-                        <input type="password" id="passwordInput" class="form-input" placeholder="Enter password">
-                        <div class="password-hint" id="passwordHint">
-                            
-                        </div>
-                    </div>
-                    
-                    <div id="passwordError" class="error-message" style="display: none;">
-                        Incorrect password for selected role.
-                    </div>
-                    
-                    <button id="connectBtn" class="btn" style="width: 100%; margin-top: 20px;">
-                        <i class="fas fa-plug"></i> Connect
-                    </button>
+<!-- Add this in the connection modal section -->
+<div id="connectionModal" class="connection-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-user-shield"></i> WriteToMira - Secure Connection</h2>
+        </div>
+        <div class="modal-body">
+            <div class="login-form">
+                <div class="form-group">
+                    <label for="userSelect"><i class="fas fa-user"></i> Select Role:</label>
+                    <select id="userSelect" class="form-input">
+                        <option value="guest">Guest</option>
+                        <option value="host">Host</option>
+                    </select>
                 </div>
+                
+                <!-- Add this for guest name input -->
+                <div id="guestNameGroup" class="form-group" style="display: none;">
+                    <label for="guestNameInput"><i class="fas fa-id-card"></i> Your Name:</label>
+                    <input type="text" id="guestNameInput" class="form-input" placeholder="Enter your display name">
+                    <small class="form-hint">This name will be shown in the chat</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="passwordInput"><i class="fas fa-lock"></i> Password:</label>
+                    <input type="password" id="passwordInput" class="form-input" placeholder="Enter password">
+                    <div class="password-hint" id="passwordHint">
+                        <!-- Password hints will go here -->
+                    </div>
+                </div>
+                
+                <div id="passwordError" class="error-message" style="display: none;">
+                    Incorrect password for selected role.
+                </div>
+                
+                <button id="connectBtn" class="btn" style="width: 100%; margin-top: 20px;">
+                    <i class="fas fa-plug"></i> Connect
+                </button>
             </div>
         </div>
     </div>
+</div>
 
     <!-- Pending Guests Modal -->
     <div id="pendingGuestsModal" class="modal-overlay" style="display: none;">
@@ -77,7 +85,7 @@
             <div class="header-content">
                 <div class="logo">
                     <i class="fas fa-comment-alt"></i>
-                    <h1>WriteToMe</h1>
+                    <h1>WriteToMira</h1>
                 </div>
                 <div class="header-controls">
                     <div class="sound-control" id="soundControl">
@@ -123,7 +131,7 @@
                     <div class="message received">
                         <div class="message-sender">System</div>
                         <div class="message-content">
-                            <div class="message-text">Welcome to WriteToMe! Connect to start chatting.</div>
+                            <div class="message-text">Welcome to WriteToMira! Connect to start chatting.</div>
                             <div class="message-time">Just now</div>
                         </div>
                     </div>
