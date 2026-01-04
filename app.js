@@ -239,7 +239,7 @@ function setupEventListeners() {
     }, { passive: false });
 }
 
-// Handle connection
+// Handle connection - FIXED AUTHENTICATION
 async function handleConnect() {
     const userSelect = document.getElementById('userSelect');
     const passwordInput = document.getElementById('passwordInput');
@@ -252,8 +252,27 @@ async function handleConnect() {
     connectBtn.disabled = true;
     connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
     
+    // Validate inputs
+    if (!selectedRole) {
+        passwordError.style.display = 'block';
+        passwordError.textContent = "Please select a role.";
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+        return;
+    }
+    
+    if (!password) {
+        passwordError.style.display = 'block';
+        passwordError.textContent = "Please enter a password.";
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+        return;
+    }
+    
     try {
-        // Authenticate user
+        console.log("Attempting authentication for role:", selectedRole);
+        
+        // Try to authenticate using RPC function
         const { data, error } = await supabaseClient
             .rpc('authenticate_user', {
                 p_username: selectedRole,
@@ -261,80 +280,209 @@ async function handleConnect() {
             });
         
         if (error) {
-            console.error("Authentication error:", error);
-            passwordError.style.display = 'block';
-            passwordError.textContent = "Authentication failed. Please check the database function.";
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            return;
-        }
-        
-        if (!data || data.length === 0 || !data[0].is_authenticated) {
-            passwordError.style.display = 'block';
-            passwordError.textContent = "Incorrect password for selected role.";
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            return;
-        }
-        
-        const authResult = data[0];
-        appState.isHost = authResult.user_role === 'host';
-        appState.userName = authResult.user_role === 'host' ? "Host" : "Guest";
-        // Generate a simple, consistent user ID
-        appState.userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
-        console.log("User authenticated:", appState.userName, "ID:", appState.userId);
-        
-    } catch (error) {
-        console.error("Authentication error:", error);
-        passwordError.style.display = 'block';
-        passwordError.textContent = "Connection error. Please check if authenticate_user function exists.";
-        connectBtn.disabled = false;
-        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-        return;
-    }
-    
-    appState.connectionTime = new Date();
-    
-    // Get user IP
-    const userIP = await getRealIP();
-    
-    if (appState.isHost) {
-        // Host creates a new session
-        try {
-            const sessionId = 'session_' + Date.now().toString(36);
+            console.error("Authentication RPC error:", error);
             
-            // Create the session
-            const { data, error } = await supabaseClient
-                .from('sessions')
-                .insert([
-                    {
-                        session_id: sessionId,
-                        host_id: appState.userId,
-                        host_name: appState.userName,
-                        host_ip: userIP,
-                        is_active: true,
-                        requires_approval: true,
-                        created_at: new Date().toISOString(),
-                        pending_guests: []
-                    }
-                ])
-                .select()
-                .single();
+            // Fallback: Check if the function exists, if not use direct table check
+            if (error.message.includes('function') && error.message.includes('does not exist')) {
+                console.log("RPC function not found, using fallback authentication");
+                
+                // Fallback authentication by checking users table directly
+                const { data: userData, error: userError } = await supabaseClient
+                    .from('users')
+                    .select('*')
+                    .eq('username', selectedRole)
+                    .eq('password', password)
+                    .single();
+                
+                if (userError || !userData) {
+                    console.error("Fallback authentication failed:", userError);
+                    passwordError.style.display = 'block';
+                    passwordError.textContent = "Authentication failed. Incorrect password or user not found.";
+                    connectBtn.disabled = false;
+                    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                    return;
+                }
+                
+                // Authentication successful with fallback
+                console.log("Fallback authentication successful:", userData);
+                appState.isHost = userData.role === 'host';
+                appState.userName = userData.role === 'host' ? "Host" : "Guest";
+                
+            } else {
+                // Other RPC error
+                passwordError.style.display = 'block';
+                passwordError.textContent = "Authentication error: " + error.message;
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                return;
+            }
+        } else {
+            // RPC authentication successful
+            console.log("RPC authentication response:", data);
             
-            if (error) {
-                console.error("Error creating session:", error);
-                alert("Failed to create session: " + error.message);
+            if (!data || data.length === 0) {
+                passwordError.style.display = 'block';
+                passwordError.textContent = "Authentication failed. No data returned.";
                 connectBtn.disabled = false;
                 connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
                 return;
             }
             
-            appState.sessionId = sessionId;
-            appState.currentSessionId = sessionId;
+            // Handle different response formats
+            const authResult = Array.isArray(data) ? data[0] : data;
+            
+            if (authResult.is_authenticated === false || !authResult.is_authenticated) {
+                passwordError.style.display = 'block';
+                passwordError.textContent = "Incorrect password for selected role.";
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                return;
+            }
+            
+            appState.isHost = authResult.user_role === 'host';
+            appState.userName = authResult.user_role === 'host' ? "Host" : "Guest";
+        }
+        
+        // Generate a unique user ID
+        appState.userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        console.log("User authenticated:", appState.userName, "ID:", appState.userId, "Is Host:", appState.isHost);
+        
+        // Continue with connection process
+        appState.connectionTime = new Date();
+        
+        // Get user IP
+        const userIP = await getRealIP();
+        
+        if (appState.isHost) {
+            await connectAsHost(userIP);
+        } else {
+            await connectAsGuest(userIP);
+        }
+        
+    } catch (error) {
+        console.error("Error in authentication process:", error);
+        passwordError.style.display = 'block';
+        passwordError.textContent = "Connection error: " + error.message;
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+    }
+}
+
+// Connect as host
+async function connectAsHost(userIP) {
+    try {
+        const sessionId = 'session_' + Date.now().toString(36);
+        
+        // Create the session
+        const { data, error } = await supabaseClient
+            .from('sessions')
+            .insert([
+                {
+                    session_id: sessionId,
+                    host_id: appState.userId,
+                    host_name: appState.userName,
+                    host_ip: userIP,
+                    is_active: true,
+                    requires_approval: true,
+                    created_at: new Date().toISOString(),
+                    pending_guests: []
+                }
+            ])
+            .select()
+            .single();
+        
+        if (error) {
+            console.error("Error creating session:", error);
+            alert("Failed to create session: " + error.message);
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
+        
+        appState.sessionId = sessionId;
+        appState.currentSessionId = sessionId;
+        appState.isConnected = true;
+        
+        // Save session to localStorage
+        localStorage.setItem('writeToMe_session', JSON.stringify({
+            isHost: appState.isHost,
+            userName: appState.userName,
+            userId: appState.userId,
+            sessionId: appState.sessionId,
+            connectionTime: appState.connectionTime,
+            soundEnabled: appState.soundEnabled
+        }));
+        
+        hideConnectionModal();
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+        updateUIAfterConnection();
+        
+        // Add connection message to chat
+        await saveMessageToDB('System', `${appState.userName} has connected to the chat.`);
+        
+        // Setup real-time subscriptions
+        setupRealtimeSubscriptions();
+        
+        // If host, show pending guests button
+        pendingGuestsBtn.style.display = 'flex';
+        loadPendingGuests();
+        setupPendingGuestsSubscription();
+        
+        // Load chat history
+        loadChatHistory();
+        
+        // Load chat sessions
+        if (appState.isHost) {
+            loadChatSessions();
+        }
+        
+    } catch (error) {
+        console.error("Error in host connection:", error);
+        alert("An error occurred: " + error.message);
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+    }
+}
+
+// Connect as guest
+async function connectAsGuest(userIP) {
+    try {
+        // First check if there's an active session
+        const { data: activeSessions, error: sessionsError } = await supabaseClient
+            .from('sessions')
+            .select('*')
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1);
+        
+        if (sessionsError) {
+            console.error("Error fetching sessions:", sessionsError);
+            alert("Error checking for active sessions: " + sessionsError.message);
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
+        
+        if (!activeSessions || activeSessions.length === 0) {
+            alert("No active session found. Please ask the host to create a session first.");
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
+        
+        const session = activeSessions[0];
+        console.log("Found active session:", session.session_id);
+        
+        // Check if this guest is already the approved guest
+        if (session.guest_id && session.guest_id === appState.userId) {
+            // Guest is already approved - direct connection
+            console.log("Guest already approved, connecting directly");
+            appState.sessionId = session.session_id;
+            appState.currentSessionId = session.session_id;
             appState.isConnected = true;
             
-            // Save session to localStorage
             localStorage.setItem('writeToMe_session', JSON.stringify({
                 isHost: appState.isHost,
                 userName: appState.userName,
@@ -348,153 +496,75 @@ async function handleConnect() {
             connectBtn.disabled = false;
             connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
             updateUIAfterConnection();
-            
-            // Add connection message to chat
-            await saveMessageToDB('System', `${appState.userName} has connected to the chat.`);
-            
-            // Setup real-time subscriptions
             setupRealtimeSubscriptions();
-            
-            // If host, show pending guests button
-            pendingGuestsBtn.style.display = 'flex';
-            loadPendingGuests();
-            setupPendingGuestsSubscription();
-            
-            // Load chat history
             loadChatHistory();
-            
-            // Load chat sessions
-            if (appState.isHost) {
-                loadChatSessions();
-            }
-            
-        } catch (error) {
-            console.error("Error in host connection:", error);
-            alert("An error occurred: " + error.message);
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            loadChatSessions();
+            return;
         }
         
-    } else {
-        // Guest requests to join
-        try {
-            // First check if there's an active session
-            const { data: activeSessions, error: sessionsError } = await supabaseClient
-                .from('sessions')
-                .select('*')
-                .eq('is_active', true)
-                .order('created_at', { ascending: false })
-                .limit(1);
-            
-            if (sessionsError) {
-                console.error("Error fetching sessions:", sessionsError);
-                alert("Error checking for active sessions: " + sessionsError.message);
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                return;
-            }
-            
-            if (!activeSessions || activeSessions.length === 0) {
-                alert("No active session found. Please ask the host to create a session first.");
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                return;
-            }
-            
-            const session = activeSessions[0];
-            console.log("Found active session:", session.session_id);
-            
-            // Check if this guest is already the approved guest
-            if (session.guest_id && session.guest_id === appState.userId) {
-                // Guest is already approved - direct connection
-                console.log("Guest already approved, connecting directly");
-                appState.sessionId = session.session_id;
-                appState.currentSessionId = session.session_id;
-                appState.isConnected = true;
-                
-                localStorage.setItem('writeToMe_session', JSON.stringify({
-                    isHost: appState.isHost,
-                    userName: appState.userName,
-                    userId: appState.userId,
-                    sessionId: appState.sessionId,
-                    connectionTime: appState.connectionTime,
-                    soundEnabled: appState.soundEnabled
-                }));
-                
-                hideConnectionModal();
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                updateUIAfterConnection();
-                setupRealtimeSubscriptions();
-                loadChatHistory();
-                loadChatSessions();
-                return;
-            }
-            
-            // Check if already in pending list
-            const currentPending = session.pending_guests || [];
-            const isAlreadyPending = currentPending.some(g => g.guest_id === appState.userId);
-            
-            if (isAlreadyPending) {
-                // Already pending
-                console.log("Guest already pending");
-                appState.sessionId = session.session_id;
-                hideConnectionModal();
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                updateUIForPendingGuest();
-                setupPendingApprovalSubscription(session.session_id);
-                return;
-            }
-            
-            // If there's already an approved guest, show message
-            if (session.guest_id && session.guest_id !== appState.userId) {
-                alert("There is already a guest connected to this session. Please wait for them to disconnect or ask the host to create a new session.");
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                return;
-            }
-            
-            // Add to pending guests
-            const pendingGuest = {
-                guest_id: appState.userId,
-                guest_name: appState.userName,
-                guest_ip: userIP,
-                requested_at: new Date().toISOString(),
-                status: 'pending'
-            };
-            
-            currentPending.push(pendingGuest);
-            
-            const { error: updateError } = await supabaseClient
-                .from('sessions')
-                .update({ 
-                    pending_guests: currentPending
-                })
-                .eq('session_id', session.session_id);
-            
-            if (updateError) {
-                console.error("Error adding to pending:", updateError);
-                alert("Failed to request access: " + updateError.message);
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                return;
-            }
-            
-            console.log("Guest added to pending list");
+        // Check if already in pending list
+        const currentPending = session.pending_guests || [];
+        const isAlreadyPending = currentPending.some(g => g.guest_id === appState.userId);
+        
+        if (isAlreadyPending) {
+            // Already pending
+            console.log("Guest already pending");
             appState.sessionId = session.session_id;
             hideConnectionModal();
             connectBtn.disabled = false;
             connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
             updateUIForPendingGuest();
             setupPendingApprovalSubscription(session.session_id);
-            
-        } catch (error) {
-            console.error("Error in guest connection:", error);
-            alert("An error occurred: " + error.message);
+            return;
+        }
+        
+        // If there's already an approved guest, show message
+        if (session.guest_id && session.guest_id !== appState.userId) {
+            alert("There is already a guest connected to this session. Please wait for them to disconnect or ask the host to create a new session.");
             connectBtn.disabled = false;
             connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
         }
+        
+        // Add to pending guests
+        const pendingGuest = {
+            guest_id: appState.userId,
+            guest_name: appState.userName,
+            guest_ip: userIP,
+            requested_at: new Date().toISOString(),
+            status: 'pending'
+        };
+        
+        currentPending.push(pendingGuest);
+        
+        const { error: updateError } = await supabaseClient
+            .from('sessions')
+            .update({ 
+                pending_guests: currentPending
+            })
+            .eq('session_id', session.session_id);
+        
+        if (updateError) {
+            console.error("Error adding to pending:", updateError);
+            alert("Failed to request access: " + updateError.message);
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
+        
+        console.log("Guest added to pending list");
+        appState.sessionId = session.session_id;
+        hideConnectionModal();
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+        updateUIForPendingGuest();
+        setupPendingApprovalSubscription(session.session_id);
+        
+    } catch (error) {
+        console.error("Error in guest connection:", error);
+        alert("An error occurred: " + error.message);
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
     }
 }
 
