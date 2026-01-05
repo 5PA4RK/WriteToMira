@@ -177,8 +177,7 @@ async function initApp() {
     loadChatSessions();
 }
 
-// SIMPLE AUTHENTICATION FOR TESTING
-// Handle connection - UPDATED TO WORK WITH DATABASE
+// Handle connection - DIRECT DATABASE AUTHENTICATION
 async function handleConnect() {
     const usernameInput = document.getElementById('usernameInput');
     const passwordInput = document.getElementById('passwordInput');
@@ -211,85 +210,89 @@ async function handleConnect() {
     try {
         console.log("Attempting authentication for user:", username);
         
-        // Check if user exists in user_credentials table
+        // Try to authenticate by checking the users table directly
         const { data: userData, error: userError } = await supabaseClient
-            .from('user_credentials')
+            .from('users')
             .select('*')
             .eq('username', username)
             .single();
         
-        if (userError || !userData) {
-            console.error("Authentication failed:", userError);
-            passwordError.style.display = 'block';
-            passwordError.textContent = "Authentication failed. User not found.";
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            return;
-        }
-        
-        // For testing: Let's check what password works
-        // First, try the hardcoded passwords from your original code
-        const testPasswords = {
-            'mira': 'mira_password',
-            'host': 'host123',
-            'mola': 'mola_password',
-            'guest': 'guest123',
-            'guest1': 'Def1234',
-            'guest2': 'Def1234',
-            'guest3': 'Def1234',
-            'guest4': 'Def1234',
-            'guest5': 'Def1234',
-            'guest6': 'Def1234',
-            'guest7': 'Def1234',
-            'guest8': 'Def1234',
-            'guest9': 'Def1234',
-            'guest10': 'Def1234'
-        };
-        
-        const userKey = username.toLowerCase();
-        const testPassword = testPasswords[userKey];
-        
-        if (testPassword && password === testPassword) {
-            // Test password matched
-            console.log("Test password matched for:", username);
-        } else {
-            // Password didn't match test passwords
-            console.log("Password didn't match test passwords, checking database...");
+        if (userError) {
+            console.error("Database error:", userError);
             
-            // Since you have bcrypt hashes, we need server-side verification
-            // For now, let's create a simple RPC function or use a workaround
-            
-            // WORKAROUND: Add plain text password to database for testing
-            // Run this SQL first in your Supabase SQL editor:
-            /*
-            ALTER TABLE user_credentials ADD COLUMN IF NOT EXISTS plain_password TEXT;
-            UPDATE user_credentials SET plain_password = 'your_password_here' WHERE username = 'Mira';
-            UPDATE user_credentials SET plain_password = 'your_password_here' WHERE username = 'Mola';
-            */
-            
-            // Check if plain_password exists in the database
-            if (userData.plain_password) {
-                if (password !== userData.plain_password) {
+            // If user not found, check if it's a new guest with default password
+            if (userError.code === 'PGRST116') { // No rows returned
+                console.log("User not found, checking if it's a new guest...");
+                
+                // For demo: Check if using default guest password
+                if (password === "Def1234") {
+                    // Auto-create guest user on the fly
+                    console.log("Creating new guest user:", username);
+                    
+                    const newUser = {
+                        username: username,
+                        password: password,
+                        role: 'guest',
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    const { error: insertError } = await supabaseClient
+                        .from('users')
+                        .insert([newUser]);
+                    
+                    if (insertError) {
+                        console.error("Error creating guest:", insertError);
+                        // Continue anyway for demo purposes
+                    }
+                    
+                    appState.isHost = false;
+                    appState.userName = username;
+                } else {
                     passwordError.style.display = 'block';
-                    passwordError.textContent = "Incorrect password. Please try again.";
+                    passwordError.textContent = "User not found. New guests must use password: Def1234";
                     connectBtn.disabled = false;
                     connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
                     return;
                 }
             } else {
-                // If no plain_password column, we need to know what password to use
-                // For Mira, you need to know what password was originally set
                 passwordError.style.display = 'block';
-                passwordError.textContent = "Password verification failed. Please check the password or update the database.";
+                passwordError.textContent = "Authentication error: " + userError.message;
                 connectBtn.disabled = false;
                 connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
                 return;
             }
+        } else if (userData) {
+            // User found, check password
+            console.log("User found in database:", userData);
+            
+            // Check password (in production, use proper hashing)
+            if (userData.password !== password) {
+                passwordError.style.display = 'block';
+                passwordError.textContent = "Incorrect password. Please try again.";
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                return;
+            }
+            
+            // Check role
+            if (!userData.role) {
+                passwordError.style.display = 'block';
+                passwordError.textContent = "User role not defined.";
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                return;
+            }
+            
+            // Set user properties
+            appState.isHost = userData.role === 'host';
+            appState.userName = userData.username + (appState.isHost ? " (Host)" : "");
+            
+            // Update last login
+            await supabaseClient
+                .from('users')
+                .update({ last_login: new Date().toISOString() })
+                .eq('username', username);
         }
-        
-        // Authentication successful
-        appState.isHost = userData.role === 'host';
-        appState.userName = userData.role === 'host' ? `${username} (Host)` : username;
         
         // Generate a unique user ID
         appState.userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
