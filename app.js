@@ -178,6 +178,7 @@ async function initApp() {
 }
 
 // SIMPLE AUTHENTICATION FOR TESTING
+// Handle connection - UPDATED TO WORK WITH DATABASE
 async function handleConnect() {
     const usernameInput = document.getElementById('usernameInput');
     const passwordInput = document.getElementById('passwordInput');
@@ -210,52 +211,85 @@ async function handleConnect() {
     try {
         console.log("Attempting authentication for user:", username);
         
-        // SIMPLE AUTHENTICATION FOR TESTING
-        // Define allowed users and their passwords
-        const allowedUsers = {
-            // Host users
-            'mira': { password: 'mira_password', role: 'host', display: 'Mira (Host)' },
-            'host': { password: 'host123', role: 'host', display: 'Host' },
-            
-            // Guest users
-            'mola': { password: 'mola_password', role: 'guest', display: 'Mola' },
-            'guest': { password: 'guest123', role: 'guest', display: 'Guest' },
-            
-            // Additional guests with default password
-            'guest1': { password: 'Def1234', role: 'guest', display: 'Guest1' },
-            'guest2': { password: 'Def1234', role: 'guest', display: 'Guest2' },
-            'guest3': { password: 'Def1234', role: 'guest', display: 'Guest3' },
-            'guest4': { password: 'Def1234', role: 'guest', display: 'Guest4' },
-            'guest5': { password: 'Def1234', role: 'guest', display: 'Guest5' },
-            'guest6': { password: 'Def1234', role: 'guest', display: 'Guest6' },
-            'guest7': { password: 'Def1234', role: 'guest', display: 'Guest7' },
-            'guest8': { password: 'Def1234', role: 'guest', display: 'Guest8' },
-            'guest9': { password: 'Def1234', role: 'guest', display: 'Guest9' },
-            'guest10': { password: 'Def1234', role: 'guest', display: 'Guest10' }
+        // Check if user exists in user_credentials table
+        const { data: userData, error: userError } = await supabaseClient
+            .from('user_credentials')
+            .select('*')
+            .eq('username', username)
+            .single();
+        
+        if (userError || !userData) {
+            console.error("Authentication failed:", userError);
+            passwordError.style.display = 'block';
+            passwordError.textContent = "Authentication failed. User not found.";
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
+        
+        // For testing: Let's check what password works
+        // First, try the hardcoded passwords from your original code
+        const testPasswords = {
+            'mira': 'mira_password',
+            'host': 'host123',
+            'mola': 'mola_password',
+            'guest': 'guest123',
+            'guest1': 'Def1234',
+            'guest2': 'Def1234',
+            'guest3': 'Def1234',
+            'guest4': 'Def1234',
+            'guest5': 'Def1234',
+            'guest6': 'Def1234',
+            'guest7': 'Def1234',
+            'guest8': 'Def1234',
+            'guest9': 'Def1234',
+            'guest10': 'Def1234'
         };
         
         const userKey = username.toLowerCase();
-        const userInfo = allowedUsers[userKey];
+        const testPassword = testPasswords[userKey];
         
-        if (!userInfo) {
-            passwordError.style.display = 'block';
-            passwordError.textContent = "User not found. Please check username.";
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            return;
-        }
-        
-        if (password !== userInfo.password) {
-            passwordError.style.display = 'block';
-            passwordError.textContent = "Incorrect password. Please try again.";
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            return;
+        if (testPassword && password === testPassword) {
+            // Test password matched
+            console.log("Test password matched for:", username);
+        } else {
+            // Password didn't match test passwords
+            console.log("Password didn't match test passwords, checking database...");
+            
+            // Since you have bcrypt hashes, we need server-side verification
+            // For now, let's create a simple RPC function or use a workaround
+            
+            // WORKAROUND: Add plain text password to database for testing
+            // Run this SQL first in your Supabase SQL editor:
+            /*
+            ALTER TABLE user_credentials ADD COLUMN IF NOT EXISTS plain_password TEXT;
+            UPDATE user_credentials SET plain_password = 'your_password_here' WHERE username = 'Mira';
+            UPDATE user_credentials SET plain_password = 'your_password_here' WHERE username = 'Mola';
+            */
+            
+            // Check if plain_password exists in the database
+            if (userData.plain_password) {
+                if (password !== userData.plain_password) {
+                    passwordError.style.display = 'block';
+                    passwordError.textContent = "Incorrect password. Please try again.";
+                    connectBtn.disabled = false;
+                    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                    return;
+                }
+            } else {
+                // If no plain_password column, we need to know what password to use
+                // For Mira, you need to know what password was originally set
+                passwordError.style.display = 'block';
+                passwordError.textContent = "Password verification failed. Please check the password or update the database.";
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                return;
+            }
         }
         
         // Authentication successful
-        appState.isHost = userInfo.role === 'host';
-        appState.userName = userInfo.display;
+        appState.isHost = userData.role === 'host';
+        appState.userName = userData.role === 'host' ? `${username} (Host)` : username;
         
         // Generate a unique user ID
         appState.userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
