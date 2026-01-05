@@ -177,81 +177,8 @@ async function initApp() {
     loadChatSessions();
 }
 
-// Set up all event listeners
-// Set up all event listeners
-function setupEventListeners() {
-    // Connection modal
-    const usernameInput = document.getElementById('usernameInput');
-    const passwordInput = document.getElementById('passwordInput');
-    
-    usernameInput.addEventListener('input', function() {
-        document.getElementById('passwordError').style.display = 'none';
-    });
-    
-    passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleConnect();
-    });
-    
-    connectBtn.addEventListener('click', handleConnect);
-    
-    // Logout
-    logoutBtn.addEventListener('click', handleLogout);
-    
-    // Pending guests
-    pendingGuestsBtn.addEventListener('click', showPendingGuests);
-    closePendingModal.addEventListener('click', () => {
-        pendingGuestsModal.style.display = 'none';
-    });
-    
-    // Chat functionality
-    messageInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
-    
-    messageInput.addEventListener('input', handleTyping);
-    sendMessageBtn.addEventListener('click', sendMessage);
-    clearChatBtn.addEventListener('click', clearChat);
-    
-    // Image upload
-    imageUpload.addEventListener('change', handleImageUpload);
-    
-    // Emoji picker
-    emojiBtn.addEventListener('click', toggleEmojiPicker);
-    
-    // Return to active chat
-    returnToActiveBtn.addEventListener('click', returnToActiveChat);
-    
-    // History
-    refreshHistoryBtn.addEventListener('click', loadChatSessions);
-    
-    // Sound control
-    soundControl.addEventListener('click', toggleSound);
-    
-    // Image modal
-    imageModal.addEventListener('click', () => {
-        imageModal.style.display = 'none';
-    });
-    
-    // Click outside emoji picker to close
-    document.addEventListener('click', (e) => {
-        if (emojiPicker && !emojiPicker.contains(e.target) && emojiBtn && !emojiBtn.contains(e.target)) {
-            emojiPicker.classList.remove('show');
-        }
-    });
-    
-    // Prevent background scrolling when modal is open
-    document.addEventListener('touchmove', function(e) {
-        if (connectionModal.style.display === 'flex' || connectionModal.classList.contains('show')) {
-            e.preventDefault();
-        }
-    }, { passive: false });
-}
-
-// Handle connection - FIXED AUTHENTICATION
-// Handle connection - UPDATED FOR USERNAME/PASSWORD SYSTEM
+// Handle connection - UPDATED TO WORK WITHOUT RPC FUNCTION
+// Handle connection - UPDATED FOR USERS TABLE
 async function handleConnect() {
     const usernameInput = document.getElementById('usernameInput');
     const passwordInput = document.getElementById('passwordInput');
@@ -284,88 +211,44 @@ async function handleConnect() {
     try {
         console.log("Attempting authentication for user:", username);
         
-        // Check if user is Mira (host/admin)
-        const isHost = username.toLowerCase() === 'mira';
+        // Check if user exists in users table
+        const { data: userData, error: userError } = await supabaseClient
+            .from('users')
+            .select('*')
+            .eq('username', username)
+            .eq('is_active', true)
+            .single();
         
-        // Determine role for display
-        const userRole = isHost ? 'host' : 'guest';
-        const displayName = isHost ? "Mira (Host)" : username;
-        
-        // Try to authenticate using RPC function
-        const { data, error } = await supabaseClient
-            .rpc('authenticate_user', {
-                p_username: username,
-                p_password: password,
-                p_role: userRole  // Pass the role for verification
-            });
-        
-        if (error) {
-            console.error("Authentication RPC error:", error);
-            
-            // Fallback: Check if the function exists, if not use direct table check
-            if (error.message.includes('function') && error.message.includes('does not exist')) {
-                console.log("RPC function not found, using fallback authentication");
-                
-                // For fallback, we'll do a simple check
-                // In production, you should have proper password hashing
-                const { data: userData, error: userError } = await supabaseClient
-                    .from('users')
-                    .select('*')
-                    .eq('username', username)
-                    .eq('password', password)
-                    .single();
-                
-                if (userError || !userData) {
-                    console.error("Fallback authentication failed:", userError);
-                    passwordError.style.display = 'block';
-                    passwordError.textContent = "Authentication failed. Incorrect username or password.";
-                    connectBtn.disabled = false;
-                    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                    return;
-                }
-                
-                // Authentication successful with fallback
-                console.log("Fallback authentication successful:", userData);
-                appState.isHost = userData.role === 'host';
-                appState.userName = displayName;
-                
-            } else {
-                // Other RPC error
-                passwordError.style.display = 'block';
-                passwordError.textContent = "Authentication error: " + error.message;
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                return;
-            }
-        } else {
-            // RPC authentication successful
-            console.log("RPC authentication response:", data);
-            
-            if (!data || data.length === 0) {
-                passwordError.style.display = 'block';
-                passwordError.textContent = "Authentication failed. No data returned.";
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                return;
-            }
-            
-            // Handle different response formats
-            const authResult = Array.isArray(data) ? data[0] : data;
-            
-            if (authResult.is_authenticated === false || !authResult.is_authenticated) {
-                passwordError.style.display = 'block';
-                passwordError.textContent = "Incorrect username or password.";
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                return;
-            }
-            
-            appState.isHost = authResult.user_role === 'host';
-            appState.userName = displayName;
+        if (userError || !userData) {
+            console.error("Authentication failed:", userError);
+            passwordError.style.display = 'block';
+            passwordError.textContent = "Authentication failed. User not found or inactive.";
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
         }
         
-        // Generate a unique user ID
-        appState.userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // Check password (plain text comparison - for production use hashing)
+        if (userData.password !== password) {
+            passwordError.style.display = 'block';
+            passwordError.textContent = "Incorrect password. Please try again.";
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
+        
+        // Update last login time
+        await supabaseClient
+            .from('users')
+            .update({ last_login: new Date().toISOString() })
+            .eq('username', username);
+        
+        // Set user role and display name
+        appState.isHost = userData.role === 'host';
+        appState.userName = userData.role === 'host' ? `${username} (Host)` : username;
+        
+        // Generate a unique user ID (or use the one from database)
+        appState.userId = userData.id || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
         console.log("User authenticated:", appState.userName, "ID:", appState.userId, "Is Host:", appState.isHost);
         
@@ -389,7 +272,6 @@ async function handleConnect() {
         connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
     }
 }
-
 // Connect as host
 async function connectAsHost(userIP) {
     try {
