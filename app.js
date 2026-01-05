@@ -177,8 +177,7 @@ async function initApp() {
     loadChatSessions();
 }
 
-// Handle connection - UPDATED TO WORK WITHOUT RPC FUNCTION
-// Handle connection - UPDATED FOR USERS TABLE
+// SIMPLE AUTHENTICATION FOR TESTING
 async function handleConnect() {
     const usernameInput = document.getElementById('usernameInput');
     const passwordInput = document.getElementById('passwordInput');
@@ -211,25 +210,42 @@ async function handleConnect() {
     try {
         console.log("Attempting authentication for user:", username);
         
-        // Check if user exists in users table
-        const { data: userData, error: userError } = await supabaseClient
-            .from('users')
-            .select('*')
-            .eq('username', username)
-            .eq('is_active', true)
-            .single();
+        // SIMPLE AUTHENTICATION FOR TESTING
+        // Define allowed users and their passwords
+        const allowedUsers = {
+            // Host users
+            'mira': { password: 'mira_password', role: 'host', display: 'Mira (Host)' },
+            'host': { password: 'host123', role: 'host', display: 'Host' },
+            
+            // Guest users
+            'mola': { password: 'mola_password', role: 'guest', display: 'Mola' },
+            'guest': { password: 'guest123', role: 'guest', display: 'Guest' },
+            
+            // Additional guests with default password
+            'guest1': { password: 'Def1234', role: 'guest', display: 'Guest1' },
+            'guest2': { password: 'Def1234', role: 'guest', display: 'Guest2' },
+            'guest3': { password: 'Def1234', role: 'guest', display: 'Guest3' },
+            'guest4': { password: 'Def1234', role: 'guest', display: 'Guest4' },
+            'guest5': { password: 'Def1234', role: 'guest', display: 'Guest5' },
+            'guest6': { password: 'Def1234', role: 'guest', display: 'Guest6' },
+            'guest7': { password: 'Def1234', role: 'guest', display: 'Guest7' },
+            'guest8': { password: 'Def1234', role: 'guest', display: 'Guest8' },
+            'guest9': { password: 'Def1234', role: 'guest', display: 'Guest9' },
+            'guest10': { password: 'Def1234', role: 'guest', display: 'Guest10' }
+        };
         
-        if (userError || !userData) {
-            console.error("Authentication failed:", userError);
+        const userKey = username.toLowerCase();
+        const userInfo = allowedUsers[userKey];
+        
+        if (!userInfo) {
             passwordError.style.display = 'block';
-            passwordError.textContent = "Authentication failed. User not found or inactive.";
+            passwordError.textContent = "User not found. Please check username.";
             connectBtn.disabled = false;
             connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
             return;
         }
         
-        // Check password (plain text comparison - for production use hashing)
-        if (userData.password !== password) {
+        if (password !== userInfo.password) {
             passwordError.style.display = 'block';
             passwordError.textContent = "Incorrect password. Please try again.";
             connectBtn.disabled = false;
@@ -237,18 +253,12 @@ async function handleConnect() {
             return;
         }
         
-        // Update last login time
-        await supabaseClient
-            .from('users')
-            .update({ last_login: new Date().toISOString() })
-            .eq('username', username);
+        // Authentication successful
+        appState.isHost = userInfo.role === 'host';
+        appState.userName = userInfo.display;
         
-        // Set user role and display name
-        appState.isHost = userData.role === 'host';
-        appState.userName = userData.role === 'host' ? `${username} (Host)` : username;
-        
-        // Generate a unique user ID (or use the one from database)
-        appState.userId = userData.id || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // Generate a unique user ID
+        appState.userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
         console.log("User authenticated:", appState.userName, "ID:", appState.userId, "Is Host:", appState.isHost);
         
