@@ -178,6 +178,7 @@ async function initApp() {
 }
 
 // Handle connection - DIRECT DATABASE AUTHENTICATION
+// Replace the handleConnect function with this updated version:
 async function handleConnect() {
     const usernameInput = document.getElementById('usernameInput');
     const passwordInput = document.getElementById('passwordInput');
@@ -210,89 +211,56 @@ async function handleConnect() {
     try {
         console.log("Attempting authentication for user:", username);
         
-        // Try to authenticate by checking the users table directly
+        // Check if user exists in user_credentials table
         const { data: userData, error: userError } = await supabaseClient
-            .from('users')
+            .from('user_credentials')
             .select('*')
             .eq('username', username)
             .single();
         
-        if (userError) {
-            console.error("Database error:", userError);
-            
-            // If user not found, check if it's a new guest with default password
-            if (userError.code === 'PGRST116') { // No rows returned
-                console.log("User not found, checking if it's a new guest...");
-                
-                // For demo: Check if using default guest password
-                if (password === "Def1234") {
-                    // Auto-create guest user on the fly
-                    console.log("Creating new guest user:", username);
-                    
-                    const newUser = {
-                        username: username,
-                        password: password,
-                        role: 'guest',
-                        created_at: new Date().toISOString()
-                    };
-                    
-                    const { error: insertError } = await supabaseClient
-                        .from('users')
-                        .insert([newUser]);
-                    
-                    if (insertError) {
-                        console.error("Error creating guest:", insertError);
-                        // Continue anyway for demo purposes
-                    }
-                    
-                    appState.isHost = false;
-                    appState.userName = username;
-                } else {
-                    passwordError.style.display = 'block';
-                    passwordError.textContent = "User not found. New guests must use password: Def1234";
-                    connectBtn.disabled = false;
-                    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                    return;
-                }
-            } else {
-                passwordError.style.display = 'block';
-                passwordError.textContent = "Authentication error: " + userError.message;
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                return;
-            }
-        } else if (userData) {
-            // User found, check password
-            console.log("User found in database:", userData);
-            
-            // Check password (in production, use proper hashing)
-            if (userData.password !== password) {
-                passwordError.style.display = 'block';
-                passwordError.textContent = "Incorrect password. Please try again.";
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                return;
-            }
-            
-            // Check role
-            if (!userData.role) {
-                passwordError.style.display = 'block';
-                passwordError.textContent = "User role not defined.";
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-                return;
-            }
-            
-            // Set user properties
-            appState.isHost = userData.role === 'host';
-            appState.userName = userData.username + (appState.isHost ? " (Host)" : "");
-            
-            // Update last login
-            await supabaseClient
-                .from('users')
-                .update({ last_login: new Date().toISOString() })
-                .eq('username', username);
+        if (userError || !userData) {
+            console.error("User not found:", userError);
+            passwordError.style.display = 'block';
+            passwordError.textContent = "Authentication failed. User not found.";
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
         }
+        
+        console.log("User found in database:", userData);
+        
+        // Use RPC function to verify password (with bcrypt)
+        const { data: authResult, error: authError } = await supabaseClient
+            .rpc('verify_user_password', {
+                p_username: username,
+                p_password_input: password
+            });
+        
+        if (authError) {
+            console.error("Password verification error:", authError);
+            
+            // Fallback: If RPC doesn't exist, we need to create it
+            // For now, we'll show a generic error
+            passwordError.style.display = 'block';
+            passwordError.textContent = "Authentication system error. Please try again.";
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
+        
+        console.log("Password verification result:", authResult);
+        
+        if (!authResult || !authResult.is_authenticated) {
+            passwordError.style.display = 'block';
+            passwordError.textContent = "Authentication failed. Incorrect password.";
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
+        
+        // Set user role based on database record
+        appState.isHost = userData.role === 'host';
+        appState.userName = appState.isHost ? "Mira (Host)" : username;
         
         // Generate a unique user ID
         appState.userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
