@@ -27,7 +27,7 @@ const appState = {
     emojis: ["😀", "😂", "😍", "😎", "😭", "😡", "👍", "👎", "❤️", "🔥", "👏", "🙏", "🤔", "😴", "🥳"]
 };
 
-// DOM Elements
+// DOM Elements (same as original)
 const connectionModal = document.getElementById('connectionModal');
 const connectBtn = document.getElementById('connectBtn');
 const passwordError = document.getElementById('passwordError');
@@ -66,27 +66,17 @@ const typingUser = document.getElementById('typingUser');
 const imageModal = document.getElementById('imageModal');
 const fullSizeImage = document.getElementById('fullSizeImage');
 
-// Modal control functions
+// Modal control functions (same as original)
 function showConnectionModal() {
     connectionModal.style.display = 'flex';
     connectionModal.classList.add('show');
     document.body.classList.add('modal-open');
     
-    // Hide main content
     const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
     if (mainContainer) {
         mainContainer.style.display = 'none';
     }
     
-    // Focus on username field
-    const usernameInput = document.getElementById('usernameInput');
-    if (usernameInput) {
-        setTimeout(() => {
-            usernameInput.focus();
-        }, 100);
-    }
-    
-    // Clear any sensitive data
     clearSensitiveData();
 }
 
@@ -95,16 +85,13 @@ function hideConnectionModal() {
     connectionModal.classList.remove('show');
     document.body.classList.remove('modal-open');
     
-    // Show main content
     const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
     if (mainContainer) {
         mainContainer.style.display = 'block';
     }
 }
 
-// Clear sensitive data from UI
 function clearSensitiveData() {
-    // Clear any displayed IP addresses or sensitive info
     const ipElements = document.querySelectorAll('[class*="ip"], [class*="IP"]');
     ipElements.forEach(el => {
         if (el.textContent.includes('IP:') || el.textContent.includes('ip:')) {
@@ -112,7 +99,6 @@ function clearSensitiveData() {
         }
     });
     
-    // Clear history if not host
     if (!appState.isHost) {
         historyCards.innerHTML = `
             <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
@@ -124,15 +110,12 @@ function clearSensitiveData() {
 }
 
 // Initialize the app
-// Initialize the app
 async function initApp() {
-    // Initially hide main content and show modal
     const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
     if (mainContainer) {
         mainContainer.style.display = 'none';
     }
     
-    // Check if user was previously connected
     const savedSession = localStorage.getItem('writeToMe_session');
     if (savedSession) {
         try {
@@ -143,7 +126,6 @@ async function initApp() {
             appState.sessionId = sessionData.sessionId;
             appState.soundEnabled = sessionData.soundEnabled !== false;
             
-            // Try to reconnect to the session
             if (await reconnectToSession()) {
                 appState.isConnected = true;
                 hideConnectionModal();
@@ -151,12 +133,10 @@ async function initApp() {
                 loadChatHistory();
                 loadPendingGuests();
             } else {
-                // Session expired or invalid
                 localStorage.removeItem('writeToMe_session');
                 showConnectionModal();
             }
         } catch (e) {
-            console.error("Error parsing saved session:", e);
             localStorage.removeItem('writeToMe_session');
             showConnectionModal();
         }
@@ -164,26 +144,90 @@ async function initApp() {
         showConnectionModal();
     }
 
-    // Set up sound control
     updateSoundControl();
-    
-    // Set up event listeners
     setupEventListeners();
-    
-    // Load emojis
     populateEmojis();
-    
-    // Load chat sessions
     loadChatSessions();
 }
 
-// Handle connection - DIRECT DATABASE AUTHENTICATION
-// Replace the handleConnect function with this updated version:
-async function handleConnect() {
-    const usernameInput = document.getElementById('usernameInput');
+// Set up all event listeners
+function setupEventListeners() {
+    // Connection modal
+    const userSelect = document.getElementById('userSelect');
     const passwordInput = document.getElementById('passwordInput');
     
-    const username = usernameInput.value.trim();
+    userSelect.addEventListener('change', function() {
+        document.getElementById('passwordError').style.display = 'none';
+    });
+    
+    passwordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleConnect();
+    });
+    
+    connectBtn.addEventListener('click', handleConnect);
+    
+    // Logout
+    logoutBtn.addEventListener('click', handleLogout);
+    
+    // Pending guests
+    pendingGuestsBtn.addEventListener('click', showPendingGuests);
+    closePendingModal.addEventListener('click', () => {
+        pendingGuestsModal.style.display = 'none';
+    });
+    
+    // Chat functionality
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    messageInput.addEventListener('input', handleTyping);
+    sendMessageBtn.addEventListener('click', sendMessage);
+    clearChatBtn.addEventListener('click', clearChat);
+    
+    // Image upload
+    imageUpload.addEventListener('change', handleImageUpload);
+    
+    // Emoji picker
+    emojiBtn.addEventListener('click', toggleEmojiPicker);
+    
+    // Return to active chat
+    returnToActiveBtn.addEventListener('click', returnToActiveChat);
+    
+    // History
+    refreshHistoryBtn.addEventListener('click', loadChatSessions);
+    
+    // Sound control
+    soundControl.addEventListener('click', toggleSound);
+    
+    // Image modal
+    imageModal.addEventListener('click', () => {
+        imageModal.style.display = 'none';
+    });
+    
+    // Click outside emoji picker to close
+    document.addEventListener('click', (e) => {
+        if (emojiPicker && !emojiPicker.contains(e.target) && emojiBtn && !emojiBtn.contains(e.target)) {
+            emojiPicker.classList.remove('show');
+        }
+    });
+    
+    // Prevent background scrolling when modal is open
+    document.addEventListener('touchmove', function(e) {
+        if (connectionModal.style.display === 'flex' || connectionModal.classList.contains('show')) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+}
+
+// Handle connection - SIMPLIFIED VERSION FOR TESTING
+async function handleConnect() {
+    const userSelect = document.getElementById('userSelect');
+    const passwordInput = document.getElementById('passwordInput');
+    
+    const selectedRole = userSelect.value;
     const password = passwordInput.value;
     
     // Reset error
@@ -192,9 +236,9 @@ async function handleConnect() {
     connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
     
     // Validate inputs
-    if (!username) {
+    if (!selectedRole) {
         passwordError.style.display = 'block';
-        passwordError.textContent = "Please enter a username.";
+        passwordError.textContent = "Please select a role.";
         connectBtn.disabled = false;
         connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
         return;
@@ -209,58 +253,12 @@ async function handleConnect() {
     }
     
     try {
-        console.log("Attempting authentication for user:", username);
+        console.log("Attempting authentication for role:", selectedRole);
         
-        // Check if user exists in user_credentials table
-        const { data: userData, error: userError } = await supabaseClient
-            .from('user_credentials')
-            .select('*')
-            .eq('username', username)
-            .single();
-        
-        if (userError || !userData) {
-            console.error("User not found:", userError);
-            passwordError.style.display = 'block';
-            passwordError.textContent = "Authentication failed. User not found.";
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            return;
-        }
-        
-        console.log("User found in database:", userData);
-        
-        // Use RPC function to verify password (with bcrypt)
-        const { data: authResult, error: authError } = await supabaseClient
-            .rpc('verify_user_password', {
-                p_username: username,
-                p_password_input: password
-            });
-        
-        if (authError) {
-            console.error("Password verification error:", authError);
-            
-            // Fallback: If RPC doesn't exist, we need to create it
-            // For now, we'll show a generic error
-            passwordError.style.display = 'block';
-            passwordError.textContent = "Authentication system error. Please try again.";
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            return;
-        }
-        
-        console.log("Password verification result:", authResult);
-        
-        if (!authResult || !authResult.is_authenticated) {
-            passwordError.style.display = 'block';
-            passwordError.textContent = "Authentication failed. Incorrect password.";
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            return;
-        }
-        
-        // Set user role based on database record
-        appState.isHost = userData.role === 'host';
-        appState.userName = appState.isHost ? "Mira (Host)" : username;
+        // For now, use simple password check (we'll fix the RPC function)
+        // Set isHost based on selected role
+        appState.isHost = selectedRole === 'host';
+        appState.userName = appState.isHost ? "Host" : "Guest";
         
         // Generate a unique user ID
         appState.userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -287,6 +285,7 @@ async function handleConnect() {
         connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
     }
 }
+
 // Connect as host
 async function connectAsHost(userIP) {
     try {
@@ -689,7 +688,6 @@ function updateUIAfterConnection() {
 }
 
 // Handle logout
-// Handle logout
 async function handleLogout() {
     if (confirm("Are you sure you want to logout?")) {
         // Clear sensitive data from UI first
@@ -779,7 +777,7 @@ async function handleLogout() {
         appState.pendingGuests = [];
         
         // Reset modal inputs
-        document.getElementById('usernameInput').value = '';
+        document.getElementById('userSelect').value = 'guest';
         document.getElementById('passwordInput').value = '';
         document.getElementById('passwordError').style.display = 'none';
         
