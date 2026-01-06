@@ -415,6 +415,7 @@ function setupEventListeners() {
     }
 }
 // Add new function for tab switching
+// Tab switching function
 function switchAdminTab(tabName) {
     if (!appState.isHost) return;
     
@@ -994,6 +995,7 @@ function updateUIForPendingGuest() {
 
 // Update UI after connection
 // Update UI after connection
+// Update UI after connection
 function updateUIAfterConnection() {
     if (!statusIndicator || !userRoleDisplay || !logoutBtn) return;
     
@@ -1025,27 +1027,12 @@ function updateUIAfterConnection() {
         }
     });
     
-    // Show/hide history section based on role
-    const historySection = document.getElementById('historySection');
-    if (historySection) {
-        historySection.style.display = 'none'; // Hide old history section
-    }
-    
     // Show/hide admin panel based on role
     if (adminSection) {
         if (appState.isHost) {
             adminSection.style.display = 'block';
             // Set default tab to history
-            if (historyTabBtn && usersTabBtn) {
-                historyTabBtn.classList.add('active');
-                usersTabBtn.classList.remove('active');
-            }
-            if (historyTabContent && usersTabContent) {
-                historyTabContent.classList.add('active');
-                usersTabContent.classList.remove('active');
-            }
-            // Load initial data for history tab
-            loadChatSessions();
+            switchAdminTab('history');
         } else {
             adminSection.style.display = 'none';
         }
@@ -1092,6 +1079,13 @@ async function handleLogout() {
         chatModeIndicator.style.display = 'none';
         chatTitle.innerHTML = '<i class="fas fa-comments"></i> Chat';
         
+
+        // Hide admin panel on logout
+        if (adminSection) {
+            adminSection.style.display = 'none';
+        }
+       
+
         // Hide main content and show modal
         const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
         if (mainContainer) {
