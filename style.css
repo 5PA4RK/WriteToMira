@@ -1357,3 +1357,13 @@ input:focus, button:focus, textarea:focus {
 .header-controls #pendingGuestsBtn[style*="display: flex"] {
     display: flex !important;
 }
+/* Add to style.css */
+.guest-count-badge {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-light));
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    margin-left: 5px;
+}
