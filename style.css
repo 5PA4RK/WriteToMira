@@ -1349,3 +1349,11 @@ input:focus, button:focus, textarea:focus {
     max-height: 500px;
     overflow-y: auto;
 }
+/* Make sure the pending guests button is visible in header */
+.header-controls #pendingGuestsBtn {
+    display: none !important; /* Start hidden */
+}
+
+.header-controls #pendingGuestsBtn[style*="display: flex"] {
+    display: flex !important;
+}
