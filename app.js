@@ -820,6 +820,7 @@ async function connectAsGuest(userIP) {
 }
 
 // Set up subscription for pending guests (for host)
+// Set up subscription for pending guests (for host)
 function setupPendingGuestsSubscription() {
     if (appState.pendingSubscription) {
         supabaseClient.removeChannel(appState.pendingSubscription);
@@ -838,8 +839,18 @@ function setupPendingGuestsSubscription() {
             (payload) => {
                 if (payload.new) {
                     appState.pendingGuests = payload.new.pending_guests || [];
-                    pendingCount.textContent = appState.pendingGuests.length;
-                    pendingGuestsBtn.style.display = appState.pendingGuests.length > 0 ? 'flex' : 'none';
+                    
+                    // Update UI
+                    if (pendingCount) {
+                        pendingCount.textContent = appState.pendingGuests.length;
+                    }
+                    if (pendingGuestsBtn) {
+                        if (appState.pendingGuests.length > 0) {
+                            pendingGuestsBtn.style.display = 'flex';
+                        } else {
+                            pendingGuestsBtn.style.display = 'none';
+                        }
+                    }
                 } else {
                     loadPendingGuests();
                 }
@@ -994,8 +1005,6 @@ function updateUIForPendingGuest() {
 }
 
 // Update UI after connection
-// Update UI after connection
-// Update UI after connection
 function updateUIAfterConnection() {
     if (!statusIndicator || !userRoleDisplay || !logoutBtn) return;
     
@@ -1038,9 +1047,19 @@ function updateUIAfterConnection() {
         }
     }
     
-    // Update pending guests button
+    // Update pending guests button - IMPORTANT FIX!
     if (pendingGuestsBtn) {
-        pendingGuestsBtn.style.display = appState.isHost && appState.pendingGuests.length > 0 ? 'flex' : 'none';
+        // Always show to host if there are pending guests
+        if (appState.isHost) {
+            if (appState.pendingGuests && appState.pendingGuests.length > 0) {
+                pendingGuestsBtn.style.display = 'flex';
+                pendingCount.textContent = appState.pendingGuests.length;
+            } else {
+                pendingGuestsBtn.style.display = 'none';
+            }
+        } else {
+            pendingGuestsBtn.style.display = 'none';
+        }
     }
     
     // Reset chat view if in historical mode
@@ -1546,6 +1565,7 @@ function addSystemMessage(text) {
 }
 
 // Load pending guests
+// Load pending guests
 async function loadPendingGuests() {
     if (!appState.isHost || !appState.currentSessionId) return;
     
@@ -1559,8 +1579,16 @@ async function loadPendingGuests() {
         if (error) throw error;
         
         appState.pendingGuests = session.pending_guests || [];
-        pendingCount.textContent = appState.pendingGuests.length;
-        pendingGuestsBtn.style.display = appState.pendingGuests.length > 0 ? 'flex' : 'none';
+        
+        // Update the button visibility and count
+        if (pendingGuestsBtn && pendingCount) {
+            pendingCount.textContent = appState.pendingGuests.length;
+            if (appState.pendingGuests.length > 0) {
+                pendingGuestsBtn.style.display = 'flex';
+            } else {
+                pendingGuestsBtn.style.display = 'none';
+            }
+        }
     } catch (error) {
         console.error("Error loading pending guests:", error);
     }
@@ -1601,6 +1629,7 @@ async function showPendingGuests() {
 }
 
 // Approve a guest
+// Approve a guest
 async function approveGuest(index) {
     const guest = appState.pendingGuests[index];
     
@@ -1623,7 +1652,14 @@ async function approveGuest(index) {
         if (error) throw error;
         
         appState.pendingGuests = appState.pendingGuests.filter((_, i) => i !== index);
-        pendingCount.textContent = appState.pendingGuests.length;
+        
+        // Update button
+        if (pendingCount) {
+            pendingCount.textContent = appState.pendingGuests.length;
+            if (appState.pendingGuests.length === 0) {
+                pendingGuestsBtn.style.display = 'none';
+            }
+        }
         
         showPendingGuests();
         
@@ -1652,7 +1688,14 @@ async function denyGuest(index) {
         if (error) throw error;
         
         appState.pendingGuests = appState.pendingGuests.filter((_, i) => i !== index);
-        pendingCount.textContent = appState.pendingGuests.length;
+        
+        // Update button
+        if (pendingCount) {
+            pendingCount.textContent = appState.pendingGuests.length;
+            if (appState.pendingGuests.length === 0) {
+                pendingGuestsBtn.style.display = 'none';
+            }
+        }
         
         showPendingGuests();
         
