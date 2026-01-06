@@ -405,8 +405,7 @@ e.preventDefault();
 // Handle connection
 // Handle connection with secure authentication
 async function handleConnect() {
-    const username = usernameInput.value.trim().toLowerCase();
-    const username = usernameInput.value.trim();  // NO .toLowerCase() here!
+const username = usernameInput.value.trim().toLowerCase();
 const password = passwordInput.value;
 
 // Reset error
@@ -435,13 +434,16 @@ try {
 console.log("Attempting authentication for username:", username);
 
 // Step 1: Check if user exists and is active in user_management table
-
 const { data: userData, error: userError } = await supabaseClient
-.from('user_management')
-.select('id, username, display_name, password_hash, role, is_active')
-.ilike('username', username)  // ← CHANGE THIS from .eq() to .ilike()
-.eq('is_active', true)
-.single();
+            .from('user_management')
+            .select('id, username, display_name, password_hash, role, is_active')
+            .eq('username', username)
+            .single();
+        .from('user_management')
+        .select('id, username, display_name, password_hash, role, is_active')
+        .ilike('username', username)  // ← CHANGE THIS from .eq() to .ilike()
+        .eq('is_active', true)
+        .single();
 
 if (userError || !userData) {
 console.log("User not found:", userError);
