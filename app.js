@@ -160,7 +160,7 @@ function updatePasswordHint(username) {
     if (!passwordHint) return;
     
     // Only show hints for the default test users
-  if (username.toLowerCase() === 'guest') {
+    if (username === 'guest') {
         passwordHint.textContent = "Test password: guest123";
         passwordHint.style.display = 'block';
     } else if (username === 'host') {
