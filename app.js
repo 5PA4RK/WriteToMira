@@ -159,14 +159,17 @@ function updatePasswordHint(username) {
     const passwordHint = document.getElementById('passwordHint');
     if (!passwordHint) return;
     
+    // Convert to lowercase for comparison only
+    const usernameLower = username.toLowerCase();
+    
     // Only show hints for the default test users
-    if (username === 'guest') {
+    if (usernameLower === 'guest') {
         passwordHint.textContent = "Test password: guest123";
         passwordHint.style.display = 'block';
-    } else if (username === 'host') {
+    } else if (usernameLower === 'host') {
         passwordHint.textContent = "Test password: host123";
         passwordHint.style.display = 'block';
-    } else if (username === 'admin') {
+    } else if (usernameLower === 'admin') {
         passwordHint.textContent = "Administrator account";
         passwordHint.style.display = 'block';
     } else {
