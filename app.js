@@ -305,7 +305,7 @@ function setupEventListeners() {
     if (usernameInput) {
         usernameInput.addEventListener('input', function() {
             if (passwordError) passwordError.style.display = 'none';
-            updatePasswordHint(this.value.toLowerCase());
+            updatePasswordHint(this.value);
         });
     }
     
