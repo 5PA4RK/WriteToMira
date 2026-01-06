@@ -405,7 +405,7 @@ function setupEventListeners() {
 // Handle connection
 // Handle connection with secure authentication
 async function handleConnect() {
-    const username = usernameInput.value.trim().toLowerCase();
+    const username = usernameInput.value.trim();
     const password = passwordInput.value;
     
     // Reset error
