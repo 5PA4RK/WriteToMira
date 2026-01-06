@@ -1367,3 +1367,102 @@ input:focus, button:focus, textarea:focus {
     font-weight: bold;
     margin-left: 5px;
 }
+/* Pending Guests Modal Styles */
+.pending-guest {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: linear-gradient(135deg, rgba(21, 33, 62, 0.8), rgba(15, 52, 96, 0.8));
+    border-radius: 12px;
+    border: 1px solid var(--accent-secondary);
+    backdrop-filter: blur(5px);
+    transition: all 0.3s;
+    margin-bottom: 10px;
+}
+
+.pending-guest:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(138, 43, 226, 0.2);
+    border-color: var(--accent-primary);
+}
+
+.guest-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+}
+
+.guest-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.guest-name i {
+    color: var(--accent-light);
+}
+
+.guest-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.guest-details small {
+    color: var(--text-secondary);
+    font-size: 12px;
+    display: block;
+}
+
+.guest-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Pulsing animation for pending button */
+@keyframes pulsePending {
+    0% { box-shadow: 0 0 0 0 rgba(138, 43, 226, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(138, 43, 226, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(138, 43, 226, 0); }
+}
+
+#pendingGuestsBtn.has-pending {
+    animation: pulsePending 2s infinite;
+    position: relative;
+}
+
+#pendingGuestsBtn.has-pending::after {
+    content: '';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 10px;
+    height: 10px;
+    background: var(--danger-red);
+    border-radius: 50%;
+    border: 2px solid var(--darker-bg);
+}
+
+/* Modal max height */
+.pending-guests-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+/* Scrollbar for pending list */
+.pending-guests-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.pending-guests-list::-webkit-scrollbar-track {
+    background: rgba(21, 33, 62, 0.5);
+    border-radius: 10px;
+}
+
+.pending-guests-list::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+    border-radius: 10px;
+}
