@@ -405,7 +405,7 @@ function setupEventListeners() {
 // Handle connection
 // Handle connection with secure authentication
 async function handleConnect() {
-    const username = usernameInput.value.trim().toLowerCase();
+    const username = usernameInput.value.trim();  // NO .toLowerCase() here!
     const password = passwordInput.value;
     
     // Reset error
@@ -434,6 +434,7 @@ async function handleConnect() {
         console.log("Attempting authentication for username:", username);
         
         // Step 1: Check if user exists and is active in user_management table
+
         const { data: userData, error: userError } = await supabaseClient
         .from('user_management')
         .select('id, username, display_name, password_hash, role, is_active')
