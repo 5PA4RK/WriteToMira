@@ -1100,7 +1100,10 @@ input:focus, button:focus, textarea:focus {
     border-radius: 4px;
     margin-top: 4px;
 }
-
+/* Username input specific styles */
+#usernameInput {
+    text-transform: lowercase;
+}
 
 /* Password hint styling */
 .password-hint {
@@ -1114,4 +1117,363 @@ input:focus, button:focus, textarea:focus {
     border-radius: 4px;
     border-left: 2px solid var(--accent-primary);
     display: none;
+}
+/* User Management Styles */
+.user-management-section {
+    margin-top: 25px;
+    background-color: var(--card-bg);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.user-management-controls {
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    background: rgba(21, 33, 62, 0.8);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.search-box {
+    position: relative;
+    flex: 1;
+    max-width: 300px;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 10px 15px 10px 40px;
+    background: rgba(15, 52, 96, 0.8);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.search-box i {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--accent-light);
+}
+
+.users-list {
+    padding: 20px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.user-card {
+    background: linear-gradient(135deg, rgba(21, 33, 62, 0.9), rgba(15, 52, 96, 0.9));
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-left: 4px solid var(--accent-secondary);
+    transition: all 0.3s;
+    backdrop-filter: blur(5px);
+}
+
+.user-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(138, 43, 226, 0.2);
+    border-left-color: var(--accent-primary);
+}
+
+.user-card.inactive {
+    opacity: 0.7;
+    border-left-color: var(--danger-red);
+}
+
+.user-card.host {
+    border-left-color: var(--success-green);
+}
+
+.user-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.user-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-name i {
+    color: var(--accent-light);
+    font-size: 18px;
+}
+
+.user-name h3 {
+    font-size: 16px;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.user-badge {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.badge-host {
+    background: linear-gradient(135deg, var(--success-green), #2ecc71);
+    color: white;
+}
+
+.badge-guest {
+    background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+    color: white;
+}
+
+.badge-inactive {
+    background: linear-gradient(135deg, var(--danger-red), #ff4757);
+    color: white;
+}
+
+.user-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.user-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.user-detail-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.user-detail-value {
+    font-size: 13px;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.user-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.modal-actions .btn {
+    flex: 1;
+}
+/* Admin Panel Styles */
+.admin-section {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 0;
+    margin-top: 20px;
+    display: none;
+}
+
+.admin-tabs {
+    display: flex;
+    background: var(--sidebar-bg);
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    overflow: hidden;
+}
+
+.admin-tab {
+    flex: 1;
+    padding: 15px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.admin-tab:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.admin-tab.active {
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-weight: 600;
+    border-bottom: 3px solid var(--primary-blue);
+}
+
+.admin-content {
+    padding: 20px;
+}
+
+.admin-tab-content {
+    display: none;
+}
+
+.admin-tab-content.active {
+    display: block;
+}
+
+.user-management-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    gap: 15px;
+}
+
+.search-box {
+    position: relative;
+    flex: 1;
+    max-width: 300px;
+}
+
+.search-box .form-input {
+    padding-left: 40px;
+    width: 100%;
+}
+
+.search-box i {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+}
+
+/* User cards */
+.user-card {
+    background: var(--sidebar-bg);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    transition: all 0.3s;
+}
+
+.user-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateY(-2px);
+}
+
+.user-card.inactive {
+    opacity: 0.7;
+    border-left: 4px solid var(--danger-red);
+}
+
+.user-card.host {
+    border-left: 4px solid var(--primary-blue);
+}
+
+.user-card.guest {
+    border-left: 4px solid var(--primary-green);
+}
+
+.user-card.admin {
+    border-left: 4px solid var(--warning-orange);
+}
+
+.user-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.user-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-name h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.user-badges {
+    display: flex;
+    gap: 5px;
+}
+
+.user-badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-host {
+    background: var(--primary-blue);
+    color: white;
+}
+
+.badge-guest {
+    background: var(--primary-green);
+    color: white;
+}
+
+.badge-admin {
+    background: var(--warning-orange);
+    color: white;
+}
+
+.badge-inactive {
+    background: var(--danger-red);
+    color: white;
+}
+
+.user-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.user-detail {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-detail:last-child {
+    border-bottom: none;
+}
+
+.user-detail-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.user-detail-value {
+    color: var(--text-primary);
+}
+
+.user-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
 }
