@@ -1100,10 +1100,7 @@ input:focus, button:focus, textarea:focus {
     border-radius: 4px;
     margin-top: 4px;
 }
-/* Username input specific styles */
-#usernameInput {
-    text-transform: lowercase;
-}
+
 
 /* Password hint styling */
 .password-hint {
