@@ -166,17 +166,16 @@ function updatePasswordHint(username) {
     if (!passwordHint) return;
     
     // Only show hints for the default test users
-    if (username === 'guest') {
+    const lowercaseUsername = username.toLowerCase();
+    if (lowercaseUsername === 'guest') {
         passwordHint.textContent = "Test password: guest123";
         passwordHint.style.display = 'block';
-    } else if (username === 'host') {
+    } else if (lowercaseUsername === 'host') {
         passwordHint.textContent = "Test password: host123";
         passwordHint.style.display = 'block';
-    } else if (username === 'admin') {
-        passwordHint.textContent = "Administrator account";
+    } else if (lowercaseUsername === 'admin') {
+        passwordHint.textContent = "Test password: admin123";
         passwordHint.style.display = 'block';
-    } else {
-        passwordHint.style.display = 'none';
     }
 }
 // Fallback authentication function
@@ -535,22 +534,24 @@ async function handleConnect() {
             console.log("All RPC methods failed, using fallback check:", rpcError);
         }
         
-        // Step 4: Fallback for testing accounts (ONLY for development/testing)
-        if (!isAuthenticated) {
-            console.log("Using fallback authentication check");
-            
-            // Check against known test passwords (ONLY for development!)
-            const testPasswords = {
-                'admin': 'admin123',
-                'host': 'host123',
-                'guest': 'guest123'
-            };
-            
-            if (testPasswords[username] && password === testPasswords[username]) {
-                console.log("Using test password for:", username);
-                isAuthenticated = true;
-            }
-        }
+// Step 4: Fallback for testing accounts (ONLY for development/testing)
+if (!isAuthenticated) {
+    console.log("Using fallback authentication check");
+    
+    // Check against known test passwords (ONLY for development!)
+    // Use lowercase username for consistency
+    const lowercaseUsername = username.toLowerCase();
+    const testPasswords = {
+        'admin': 'admin123',
+        'host': 'host123',
+        'guest': 'guest123'
+    };
+    
+    if (testPasswords[lowercaseUsername] && password === testPasswords[lowercaseUsername]) {
+        console.log("Using test password for:", lowercaseUsername);
+        isAuthenticated = true;
+    }
+}
         
         // Step 5: Final authentication check
         if (!isAuthenticated) {
