@@ -67,12 +67,6 @@ const typingUser = document.getElementById('typingUser');
 
 const imageModal = document.getElementById('imageModal');
 const fullSizeImage = document.getElementById('fullSizeImage');
-// Add to DOM Elements section
-const adminSection = document.getElementById('adminSection');
-const historyTabBtn = document.getElementById('historyTabBtn');
-const usersTabBtn = document.getElementById('usersTabBtn');
-const historyTabContent = document.getElementById('historyTabContent');
-const usersTabContent = document.getElementById('usersTabContent');
 
 // User Management DOM Elements
 const userManagementSection = document.getElementById('userManagementSection');
@@ -406,41 +400,8 @@ function setupEventListeners() {
             e.preventDefault();
         }
     }, { passive: false });
-    if (historyTabBtn) {
-        historyTabBtn.addEventListener('click', () => switchAdminTab('history'));
-    }
-    
-    if (usersTabBtn) {
-        usersTabBtn.addEventListener('click', () => switchAdminTab('users'));
-    }
 }
-// Add new function for tab switching
-function switchAdminTab(tabName) {
-    if (!appState.isHost) return;
-    
-    // Remove active class from all tabs
-    if (historyTabBtn && usersTabBtn) {
-        historyTabBtn.classList.remove('active');
-        usersTabBtn.classList.remove('active');
-    }
-    
-    // Hide all tab content
-    if (historyTabContent && usersTabContent) {
-        historyTabContent.classList.remove('active');
-        usersTabContent.classList.remove('active');
-    }
-    
-    // Show selected tab
-    if (tabName === 'history') {
-        if (historyTabBtn) historyTabBtn.classList.add('active');
-        if (historyTabContent) historyTabContent.classList.add('active');
-        loadChatSessions();
-    } else if (tabName === 'users') {
-        if (usersTabBtn) usersTabBtn.classList.add('active');
-        if (usersTabContent) usersTabContent.classList.add('active');
-        loadUsers();
-    }
-}
+
 // Handle connection
 // Handle connection with secure authentication
 async function handleConnect() {
@@ -851,59 +812,37 @@ function setupPendingGuestsSubscription() {
 
 // Set up subscription for pending approval (for guest)
 function setupPendingApprovalSubscription(sessionId) {
-    if (appState.pendingSubscription) {
-        supabaseClient.removeChannel(appState.pendingSubscription);
-    }
-    
-    appState.pendingSubscription = supabaseClient
-        .channel('pending-approval-channel-' + sessionId)
-        .on(
-            'postgres_changes',
-            {
-                event: '*',
-                schema: 'public',
-                table: 'sessions',
-                filter: 'session_id=eq.' + sessionId
-            },
-            async (payload) => {
-                console.log('Pending approval payload:', payload);
-                
-                if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-                    const session = payload.new || {};
-                    
-                    console.log("Guest ID in session:", session.guest_id, "Our ID:", appState.userId);
-                    
-                    if (session.guest_id === appState.userId) {
-                        console.log("Guest has been approved!");
-                        appState.currentSessionId = sessionId;
-                        appState.isConnected = true;
+if (appState.pendingSubscription) {
+supabaseClient.removeChannel(appState.pendingSubscription);
+@@ -836,6 +23,12 @@ function setupPendingApprovalSubscription(sessionId) {
+
+if (session.guest_id === appState.userId) {
+console.log("Guest has been approved!");
                         
-                        localStorage.setItem('writeToMe_session', JSON.stringify({
-                            isHost: appState.isHost,
-                            userName: appState.userName,
-                            userId: appState.userId,
-                            sessionId: appState.sessionId,
-                            connectionTime: appState.connectionTime,
-                            soundEnabled: appState.soundEnabled
-                        }));
-                        
-                        updateUIAfterConnection();
-                        setupRealtimeSubscriptions();
-                        await loadChatHistory();
-                        
-                        if (appState.pendingSubscription) {
-                            supabaseClient.removeChannel(appState.pendingSubscription);
-                            appState.pendingSubscription = null;
+                        // Check if we've already processed this approval
+                        if (appState.currentSessionId === sessionId && appState.isConnected) {
+                            return; // Already connected, ignore duplicate update
                         }
                         
+appState.currentSessionId = sessionId;
+appState.isConnected = true;
+
+@@ -857,7 +50,11 @@ function setupPendingApprovalSubscription(sessionId) {
+appState.pendingSubscription = null;
+}
+
                         await saveMessageToDB('System', `${appState.userName} has joined the chat.`);
-                    }
-                }
-            }
-        )
-        .subscribe((status) => {
-            console.log('Pending approval subscription status:', status);
-        });
+                        // Only add join message if this is the first connection
+                        // and we're not already in an active chat
+                        if (!appState.isViewingHistory) {
+                            await saveMessageToDB('System', `${appState.userName} has joined the chat.`);
+                        }
+}
+}
+}
+@@ -866,1467 +63,3 @@ function setupPendingApprovalSubscription(sessionId) {
+console.log('Pending approval subscription status:', status);
+});
 }
 
 // Get real IP address
@@ -993,28 +932,17 @@ function updateUIForPendingGuest() {
 }
 
 // Update UI after connection
-// Update UI after connection
 function updateUIAfterConnection() {
-    if (!statusIndicator || !userRoleDisplay || !logoutBtn) return;
-    
-    // Update status indicator and user display
     statusIndicator.className = 'status-indicator';
     statusIndicator.classList.add('online');
     userRoleDisplay.textContent = `${appState.userName} (Connected)`;
     logoutBtn.style.display = 'flex';
     
-    // Enable chat input
-    if (messageInput) {
-        messageInput.disabled = false;
-        messageInput.placeholder = "Type your message here... (Press Enter to send, Shift+Enter for new line)";
-        messageInput.focus();
-    }
+    messageInput.disabled = false;
+    sendMessageBtn.disabled = false;
+    messageInput.placeholder = "Type your message here... (Press Enter to send, Shift+Enter for new line)";
+    messageInput.focus();
     
-    if (sendMessageBtn) {
-        sendMessageBtn.disabled = false;
-    }
-    
-    // Remove pending guest messages
     const systemMessages = document.querySelectorAll('.message .message-sender');
     systemMessages.forEach(msg => {
         if (msg.textContent === 'System') {
@@ -1025,40 +953,9 @@ function updateUIAfterConnection() {
         }
     });
     
-    // Show/hide history section based on role
     const historySection = document.getElementById('historySection');
     if (historySection) {
-        historySection.style.display = 'none'; // Hide old history section
-    }
-    
-    // Show/hide admin panel based on role
-    if (adminSection) {
-        if (appState.isHost) {
-            adminSection.style.display = 'block';
-            // Set default tab to history
-            if (historyTabBtn && usersTabBtn) {
-                historyTabBtn.classList.add('active');
-                usersTabBtn.classList.remove('active');
-            }
-            if (historyTabContent && usersTabContent) {
-                historyTabContent.classList.add('active');
-                usersTabContent.classList.remove('active');
-            }
-            // Load initial data for history tab
-            loadChatSessions();
-        } else {
-            adminSection.style.display = 'none';
-        }
-    }
-    
-    // Update pending guests button
-    if (pendingGuestsBtn) {
-        pendingGuestsBtn.style.display = appState.isHost && appState.pendingGuests.length > 0 ? 'flex' : 'none';
-    }
-    
-    // Reset chat view if in historical mode
-    if (appState.isViewingHistory) {
-        returnToActiveChat();
+        historySection.style.display = appState.isHost ? 'block' : 'none';
     }
 }
 
