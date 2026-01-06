@@ -153,29 +153,7 @@ function clearSensitiveData() {
     }
 }
 
-// Update password hint based on username
-// Update password hint based on username
-function updatePasswordHint(username) {
-    const passwordHint = document.getElementById('passwordHint');
-    if (!passwordHint) return;
-    
-    // Convert to lowercase for comparison only
-    const usernameLower = username.toLowerCase();
-    
-    // Only show hints for the default test users
-    if (usernameLower === 'guest') {
-        passwordHint.textContent = "Test password: guest123";
-        passwordHint.style.display = 'block';
-    } else if (usernameLower === 'host') {
-        passwordHint.textContent = "Test password: host123";
-        passwordHint.style.display = 'block';
-    } else if (usernameLower === 'admin') {
-        passwordHint.textContent = "Administrator account";
-        passwordHint.style.display = 'block';
-    } else {
-        passwordHint.style.display = 'none';
-    }
-}
+
 // Fallback authentication function
 async function authenticateUserFallback(username, password) {
     try {
