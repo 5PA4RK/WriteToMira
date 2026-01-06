@@ -637,7 +637,7 @@ async function connectAsHost(userIP) {
                     is_active: true,
                     requires_approval: true,
                     created_at: new Date().toISOString(),
-                    pending_guests: []
+                    max_guests: 50 // Set a reasonable limit
                 }
             ])
             .select()
@@ -671,7 +671,7 @@ async function connectAsHost(userIP) {
         updateUIAfterConnection();
         
         // Add connection message to chat
-        await saveMessageToDB('System', `${appState.userName} has connected to the chat.`);
+        await saveMessageToDB('System', `${appState.userName} has created a new chat session. Multiple guests can now join.`);
         
         // Setup real-time subscriptions
         setupRealtimeSubscriptions();
@@ -697,6 +697,7 @@ async function connectAsHost(userIP) {
     }
 }
 
+// Connect as guest
 // Connect as guest
 async function connectAsGuest(userIP) {
     try {
@@ -726,8 +727,38 @@ async function connectAsGuest(userIP) {
         const session = activeSessions[0];
         console.log("Found active session:", session.session_id);
         
-        // Check if this guest is already the approved guest
-        if (session.guest_id && session.guest_id === appState.userId) {
+        // Check if guest limit is reached
+        const { data: approvedGuests, error: guestsError } = await supabaseClient
+            .from('session_guests')
+            .select('*')
+            .eq('session_id', session.session_id)
+            .eq('status', 'approved');
+        
+        if (guestsError) {
+            console.error("Error checking guest count:", guestsError);
+            // Continue anyway
+        }
+        
+        const currentGuestCount = approvedGuests ? approvedGuests.length : 0;
+        const maxGuests = session.max_guests || 10;
+        
+        if (currentGuestCount >= maxGuests) {
+            alert("This session has reached the maximum number of guests. Please try another session or ask the host to increase the limit.");
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
+        
+        // Check if this guest is already approved
+        const { data: existingGuest, error: existingError } = await supabaseClient
+            .from('session_guests')
+            .select('*')
+            .eq('session_id', session.session_id)
+            .eq('guest_id', appState.userId)
+            .eq('status', 'approved')
+            .single();
+        
+        if (existingGuest && !existingError) {
             // Guest is already approved - direct connection
             console.log("Guest already approved, connecting directly");
             appState.sessionId = session.session_id;
@@ -754,10 +785,15 @@ async function connectAsGuest(userIP) {
         }
         
         // Check if already in pending list
-        const currentPending = session.pending_guests || [];
-        const isAlreadyPending = currentPending.some(g => g.guest_id === appState.userId);
+        const { data: pendingGuest, error: pendingError } = await supabaseClient
+            .from('session_guests')
+            .select('*')
+            .eq('session_id', session.session_id)
+            .eq('guest_id', appState.userId)
+            .eq('status', 'pending')
+            .single();
         
-        if (isAlreadyPending) {
+        if (pendingGuest && !pendingError) {
             // Already pending
             console.log("Guest already pending");
             appState.sessionId = session.session_id;
@@ -769,35 +805,21 @@ async function connectAsGuest(userIP) {
             return;
         }
         
-        // If there's already an approved guest, show message
-        if (session.guest_id && session.guest_id !== appState.userId) {
-            alert("There is already a guest connected to this session. Please wait for them to disconnect or ask the host to create a new session.");
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            return;
-        }
+        // Add to pending guests in session_guests table
+        const { error: insertError } = await supabaseClient
+            .from('session_guests')
+            .insert([{
+                session_id: session.session_id,
+                guest_id: appState.userId,
+                guest_name: appState.userName,
+                guest_ip: userIP,
+                status: 'pending',
+                requested_at: new Date().toISOString()
+            }]);
         
-        // Add to pending guests
-        const pendingGuest = {
-            guest_id: appState.userId,
-            guest_name: appState.userName,
-            guest_ip: userIP,
-            requested_at: new Date().toISOString(),
-            status: 'pending'
-        };
-        
-        currentPending.push(pendingGuest);
-        
-        const { error: updateError } = await supabaseClient
-            .from('sessions')
-            .update({ 
-                pending_guests: currentPending
-            })
-            .eq('session_id', session.session_id);
-        
-        if (updateError) {
-            console.error("Error adding to pending:", updateError);
-            alert("Failed to request access: " + updateError.message);
+        if (insertError) {
+            console.error("Error adding to pending:", insertError);
+            alert("Failed to request access: " + insertError.message);
             connectBtn.disabled = false;
             connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
             return;
@@ -820,7 +842,6 @@ async function connectAsGuest(userIP) {
 }
 
 // Set up subscription for pending guests (for host)
-// Set up subscription for pending guests (for host)
 function setupPendingGuestsSubscription() {
     if (appState.pendingSubscription) {
         supabaseClient.removeChannel(appState.pendingSubscription);
@@ -831,29 +852,14 @@ function setupPendingGuestsSubscription() {
         .on(
             'postgres_changes',
             {
-                event: 'UPDATE',
+                event: '*',
                 schema: 'public',
-                table: 'sessions',
-                filter: 'session_id=eq.' + appState.currentSessionId
+                table: 'session_guests',
+                filter: 'session_id=eq.' + appState.currentSessionId + 'AND status=eq.pending'
             },
             (payload) => {
-                if (payload.new) {
-                    appState.pendingGuests = payload.new.pending_guests || [];
-                    
-                    // Update UI
-                    if (pendingCount) {
-                        pendingCount.textContent = appState.pendingGuests.length;
-                    }
-                    if (pendingGuestsBtn) {
-                        if (appState.pendingGuests.length > 0) {
-                            pendingGuestsBtn.style.display = 'flex';
-                        } else {
-                            pendingGuestsBtn.style.display = 'none';
-                        }
-                    }
-                } else {
-                    loadPendingGuests();
-                }
+                console.log('Pending guests update:', payload);
+                loadPendingGuests(); // Reload pending guests
             }
         )
         .subscribe((status) => {
@@ -874,18 +880,16 @@ function setupPendingApprovalSubscription(sessionId) {
             {
                 event: '*',
                 schema: 'public',
-                table: 'sessions',
-                filter: 'session_id=eq.' + sessionId
+                table: 'session_guests',
+                filter: 'session_id=eq.' + sessionId + 'AND guest_id=eq.' + appState.userId
             },
             async (payload) => {
                 console.log('Pending approval payload:', payload);
                 
                 if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-                    const session = payload.new || {};
+                    const guest = payload.new || {};
                     
-                    console.log("Guest ID in session:", session.guest_id, "Our ID:", appState.userId);
-                    
-                    if (session.guest_id === appState.userId) {
+                    if (guest.status === 'approved') {
                         console.log("Guest has been approved!");
                         appState.currentSessionId = sessionId;
                         appState.isConnected = true;
@@ -909,6 +913,9 @@ function setupPendingApprovalSubscription(sessionId) {
                         }
                         
                         await saveMessageToDB('System', `${appState.userName} has joined the chat.`);
+                    } else if (guest.status === 'rejected') {
+                        alert("Your access request was rejected by the host.");
+                        location.reload();
                     }
                 }
             }
@@ -1114,25 +1121,26 @@ async function handleLogout() {
         // Update session status in database
         if (appState.isConnected && appState.currentSessionId) {
             try {
-                if (appState.isHost) {
-                    await supabaseClient
-                        .from('sessions')
-                        .update({ 
-                            is_active: false,
-                            ended_at: new Date().toISOString()
-                        })
-                        .eq('session_id', appState.currentSessionId);
-                } else {
-                    await supabaseClient
-                        .from('sessions')
-                        .update({ 
-                            guest_id: null,
-                            guest_name: null,
-                            guest_connected_at: null,
-                            guest_ip: null
-                        })
-                        .eq('session_id', appState.currentSessionId);
-                }
+// In handleLogout function, update the guest logout logic:
+if (appState.isHost) {
+    await supabaseClient
+        .from('sessions')
+        .update({ 
+            is_active: false,
+            ended_at: new Date().toISOString()
+        })
+        .eq('session_id', appState.currentSessionId);
+} else {
+    // Mark guest as left in session_guests table
+    await supabaseClient
+        .from('session_guests')
+        .update({ 
+            status: 'left',
+            left_at: new Date().toISOString()
+        })
+        .eq('session_id', appState.currentSessionId)
+        .eq('guest_id', appState.userId);
+}
             } catch (error) {
                 console.error("Error updating session on logout:", error);
             }
@@ -1565,20 +1573,21 @@ function addSystemMessage(text) {
 }
 
 // Load pending guests
-// Load pending guests
 async function loadPendingGuests() {
     if (!appState.isHost || !appState.currentSessionId) return;
     
     try {
-        const { data: session, error } = await supabaseClient
-            .from('sessions')
-            .select('pending_guests')
+        // Get pending guests from session_guests table
+        const { data: guests, error } = await supabaseClient
+            .from('session_guests')
+            .select('*')
             .eq('session_id', appState.currentSessionId)
-            .single();
+            .eq('status', 'pending')
+            .order('requested_at', { ascending: true });
         
         if (error) throw error;
         
-        appState.pendingGuests = session.pending_guests || [];
+        appState.pendingGuests = guests || [];
         
         // Update the button visibility and count
         if (pendingGuestsBtn && pendingCount) {
@@ -1609,6 +1618,7 @@ async function showPendingGuests() {
             guestDiv.innerHTML = `
                 <div class="guest-info">
                     <strong>${guest.guest_name}</strong>
+                    <small>User ID: ${guest.guest_id.substring(0, 8)}...</small>
                     <small>IP: ${guest.guest_ip || 'Unknown'}</small>
                     <small>Requested: ${new Date(guest.requested_at).toLocaleTimeString()}</small>
                 </div>
@@ -1629,29 +1639,23 @@ async function showPendingGuests() {
 }
 
 // Approve a guest
-// Approve a guest
-async function approveGuest(index) {
-    const guest = appState.pendingGuests[index];
+async function approveGuest(guestIndex) {
+    const guest = appState.pendingGuests[guestIndex];
     
     try {
-        const updateData = {
-            guest_id: guest.guest_id,
-            guest_name: guest.guest_name,
-            guest_ip: guest.guest_ip,
-            guest_connected_at: new Date().toISOString(),
-            pending_guests: appState.pendingGuests.filter((_, i) => i !== index)
-        };
-        
-        console.log("Approving guest:", guest.guest_name, "ID:", guest.guest_id);
-        
+        // Update guest status to approved
         const { error } = await supabaseClient
-            .from('sessions')
-            .update(updateData)
-            .eq('session_id', appState.currentSessionId);
+            .from('session_guests')
+            .update({
+                status: 'approved',
+                approved_at: new Date().toISOString()
+            })
+            .eq('id', guest.id);
         
         if (error) throw error;
         
-        appState.pendingGuests = appState.pendingGuests.filter((_, i) => i !== index);
+        // Remove from pending list in state
+        appState.pendingGuests = appState.pendingGuests.filter((_, i) => i !== guestIndex);
         
         // Update button
         if (pendingCount) {
@@ -1663,6 +1667,7 @@ async function approveGuest(index) {
         
         showPendingGuests();
         
+        // Send system message
         await saveMessageToDB('System', `${guest.guest_name} has been approved and joined the chat.`);
         
     } catch (error) {
@@ -1672,22 +1677,23 @@ async function approveGuest(index) {
 }
 
 // Deny a guest
-async function denyGuest(index) {
-    const guest = appState.pendingGuests[index];
+async function denyGuest(guestIndex) {
+    const guest = appState.pendingGuests[guestIndex];
     
     try {
-        const updateData = {
-            pending_guests: appState.pendingGuests.filter((_, i) => i !== index)
-        };
-        
+        // Update guest status to rejected
         const { error } = await supabaseClient
-            .from('sessions')
-            .update(updateData)
-            .eq('session_id', appState.currentSessionId);
+            .from('session_guests')
+            .update({
+                status: 'rejected',
+                left_at: new Date().toISOString()
+            })
+            .eq('id', guest.id);
         
         if (error) throw error;
         
-        appState.pendingGuests = appState.pendingGuests.filter((_, i) => i !== index);
+        // Remove from pending list in state
+        appState.pendingGuests = appState.pendingGuests.filter((_, i) => i !== guestIndex);
         
         // Update button
         if (pendingCount) {
@@ -1708,17 +1714,20 @@ async function denyGuest(index) {
 // Load chat sessions for history panel
 async function loadChatSessions() {
     try {
-        // Hide history for non-hosts
+        // Hide history for non-hosts (if still showing somewhere else)
         if (!appState.isHost) {
-            historyCards.innerHTML = `
-                <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
-                    <i class="fas fa-lock" style="font-size: 24px; margin-bottom: 10px;"></i>
-                    <div>History view requires host privileges</div>
-                </div>
-            `;
+            if (historyCards) {
+                historyCards.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+                        <i class="fas fa-lock" style="font-size: 24px; margin-bottom: 10px;"></i>
+                        <div>History view requires host privileges</div>
+                    </div>
+                `;
+            }
             return;
         }
         
+        // Fetch all sessions
         const { data: sessions, error } = await supabaseClient
             .from('sessions')
             .select('*')
@@ -1726,70 +1735,173 @@ async function loadChatSessions() {
         
         if (error) {
             console.error("Error loading sessions:", error);
-            historyCards.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Could not load sessions</div>';
+            if (historyCards) {
+                historyCards.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Could not load sessions</div>';
+            }
             return;
         }
         
+        if (!historyCards) return;
         historyCards.innerHTML = '';
         
-        sessions.forEach(session => {
+        // Process each session
+        for (const session of sessions) {
             const isActive = session.session_id === appState.currentSessionId && session.is_active;
+            
+            // Get approved guests for this session
+            const { data: guests, error: guestsError } = await supabaseClient
+                .from('session_guests')
+                .select('guest_name, approved_at, status')
+                .eq('session_id', session.session_id)
+                .eq('status', 'approved');
+            
+            if (guestsError) {
+                console.error("Error loading guests for session:", guestsError);
+                continue;
+            }
+            
+            const guestCount = guests ? guests.length : 0;
+            let guestNames = 'None';
+            
+            if (guests && guests.length > 0) {
+                // Show first 2-3 guest names, then count
+                if (guests.length <= 3) {
+                    guestNames = guests.map(g => g.guest_name).join(', ');
+                } else {
+                    const firstTwo = guests.slice(0, 2).map(g => g.guest_name).join(', ');
+                    guestNames = `${firstTwo} + ${guests.length - 2} more`;
+                }
+            }
+            
+            // Get pending guest count
+            const { data: pendingGuests, error: pendingError } = await supabaseClient
+                .from('session_guests')
+                .select('id')
+                .eq('session_id', session.session_id)
+                .eq('status', 'pending');
+            
+            const pendingCount = pendingGuests ? pendingGuests.length : 0;
+            
+            // Format dates
+            const startDate = new Date(session.created_at);
+            const endDate = session.ended_at ? new Date(session.ended_at) : null;
+            
+            // Calculate session duration
+            let duration = 'Ongoing';
+            if (endDate) {
+                const diffMs = endDate - startDate;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMins / 60);
+                const diffDays = Math.floor(diffHours / 24);
+                
+                if (diffDays > 0) {
+                    duration = `${diffDays}d ${diffHours % 24}h`;
+                } else if (diffHours > 0) {
+                    duration = `${diffHours}h ${diffMins % 60}m`;
+                } else {
+                    duration = `${diffMins}m`;
+                }
+            }
+            
+            // Only show full IP info to host
+            const hostIP = appState.isHost ? (session.host_ip || 'N/A') : '***';
+            
             const card = document.createElement('div');
             card.className = 'session-card';
             if (isActive) {
                 card.classList.add('active');
             }
             
-            // Only show full IP info to host
-            const hostIP = appState.isHost ? (session.host_ip || 'N/A') : '***';
-            const guestIP = appState.isHost ? (session.guest_ip || 'N/A') : '***';
-            
             card.innerHTML = `
-            <div class="session-card-header">
-                <div class="session-id">${session.session_id.substring(0, 10)}...</div>
-                ${isActive ? '<div class="session-active-badge">Active Now</div>' : ''}
-            </div>
-            <div class="session-info">
-                <div class="session-info-item">
-                    <div class="session-info-row">
-                        <span class="session-info-label">Host:</span>
-                        <span class="session-info-value">${session.host_name || 'Unknown'}</span>
+                <div class="session-card-header">
+                    <div class="session-header-left">
+                        <div class="session-id">${session.session_id.substring(0, 12)}...</div>
+                        <div class="session-stats">
+                            <span class="guest-count">
+                                <i class="fas fa-users"></i> ${guestCount}
+                            </span>
+                            ${pendingCount > 0 ? `
+                            <span class="pending-count">
+                                <i class="fas fa-user-clock"></i> ${pendingCount}
+                            </span>
+                            ` : ''}
+                        </div>
                     </div>
-                    <div class="session-info-row">
-                        <span class="session-info-label">Host IP:</span>
-                        <span class="session-info-value">${hostIP}</span>
+                    ${isActive ? '<div class="session-active-badge">Active Now</div>' : ''}
+                </div>
+                
+                <div class="session-info">
+                    <div class="session-info-section">
+                        <div class="session-info-row">
+                            <span class="session-info-label">Host:</span>
+                            <span class="session-info-value">${session.host_name || 'Unknown'}</span>
+                        </div>
+                        <div class="session-info-row">
+                            <span class="session-info-label">Host IP:</span>
+                            <span class="session-info-value">${hostIP}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="session-info-section">
+                        <div class="session-info-row">
+                            <span class="session-info-label">Guests:</span>
+                            <span class="session-info-value" title="${guests ? guests.map(g => g.guest_name).join(', ') : 'None'}">
+                                ${guestNames}
+                            </span>
+                        </div>
+                        <div class="session-info-row">
+                            <span class="session-info-label">Max Guests:</span>
+                            <span class="session-info-value">${session.max_guests || 10}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="session-info-section">
+                        <div class="session-info-row">
+                            <span class="session-info-label">Started:</span>
+                            <span class="session-info-value">${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <div class="session-info-row">
+                            <span class="session-info-label">${endDate ? 'Ended:' : 'Status:'}</span>
+                            <span class="session-info-value">
+                                ${endDate ? 
+                                    `${endDate.toLocaleDateString()} ${endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : 
+                                    'Active'
+                                }
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="session-info-section">
+                        <div class="session-info-row">
+                            <span class="session-info-label">Duration:</span>
+                            <span class="session-info-value">${duration}</span>
+                        </div>
+                        <div class="session-info-row">
+                            <span class="session-info-label">Requires Approval:</span>
+                            <span class="session-info-value">${session.requires_approval ? 'Yes' : 'No'}</span>
+                        </div>
                     </div>
                 </div>
-                <div class="session-info-item">
-                    <div class="session-info-row">
-                        <span class="session-info-label">Guest:</span>
-                        <span class="session-info-value">${session.guest_name || 'None'}</span>
-                    </div>
-                    <div class="session-info-row">
-                        <span class="session-info-label">Guest IP:</span>
-                        <span class="session-info-value">${guestIP}</span>
-                    </div>
+                
+                <div class="session-actions">
+                    <button class="btn btn-secondary btn-small" onclick="viewSessionHistory('${session.session_id}')">
+                        <i class="fas fa-eye"></i> View Chat
+                    </button>
+                    <button class="btn btn-info btn-small" onclick="showSessionGuests('${session.session_id}')">
+                        <i class="fas fa-users"></i> Guests
+                    </button>
+                    <button class="btn btn-success btn-small" onclick="downloadSession('${session.session_id}')">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    ${appState.isHost ? `
+                    <button class="btn btn-danger btn-small" onclick="deleteSession('${session.session_id}')">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                    ` : ''}
                 </div>
-                <div class="session-info-item">
-                    <span class="session-info-label">Started:</span>
-                    <span class="session-info-value">${new Date(session.created_at).toLocaleDateString()}</span>
-                </div>
-            </div>
-            <div class="session-actions">
-                <button class="btn btn-secondary btn-small" onclick="viewSessionHistory('${session.session_id}')">
-                    <i class="fas fa-eye"></i> View
-                </button>
-                <button class="btn btn-success btn-small" onclick="downloadSession('${session.session_id}')">
-                    <i class="fas fa-download"></i> Download
-                </button>
-                ${appState.isHost ? `
-                <button class="btn btn-danger btn-small" onclick="deleteSession('${session.session_id}')">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-                ` : ''}
-            </div>
-        `;
+            `;
             
+            // Add click handler for the whole card (except buttons)
             card.addEventListener('click', (e) => {
                 if (!e.target.closest('.session-actions')) {
                     viewSessionHistory(session.session_id);
@@ -1797,12 +1909,273 @@ async function loadChatSessions() {
             });
             
             historyCards.appendChild(card);
-        });
+        }
+        
+        // Add CSS for the new elements if not already added
+        addSessionCardStyles();
+        
     } catch (error) {
         console.error("Error loading sessions:", error);
-        historyCards.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Error loading sessions</div>';
+        if (historyCards) {
+            historyCards.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Error loading sessions</div>';
+        }
     }
 }
+
+// Helper function to show detailed guest info for a session
+async function showSessionGuests(sessionId) {
+    try {
+        // Get all guests for this session
+        const { data: guests, error } = await supabaseClient
+            .from('session_guests')
+            .select('*')
+            .eq('session_id', sessionId)
+            .order('requested_at', { ascending: true });
+        
+        if (error) throw error;
+        
+        // Group guests by status
+        const pendingGuests = guests.filter(g => g.status === 'pending');
+        const approvedGuests = guests.filter(g => g.status === 'approved');
+        const rejectedGuests = guests.filter(g => g.status === 'rejected');
+        const leftGuests = guests.filter(g => g.status === 'left');
+        
+        let guestInfo = `
+            <div class="guest-details-modal">
+                <h3><i class="fas fa-users"></i> Guest Details</h3>
+                <p><strong>Session ID:</strong> ${sessionId.substring(0, 20)}...</p>
+                
+                <div class="guest-status-section">
+                    <h4><i class="fas fa-check-circle" style="color: var(--success-green);"></i> Approved Guests (${approvedGuests.length})</h4>
+                    ${approvedGuests.length > 0 ? approvedGuests.map(g => `
+                        <div class="guest-detail">
+                            <strong>${g.guest_name}</strong>
+                            <div class="guest-meta">
+                                <small>Joined: ${new Date(g.approved_at).toLocaleString()}</small>
+                                <small>IP: ${g.guest_ip || 'Unknown'}</small>
+                            </div>
+                        </div>
+                    `).join('') : '<p>No approved guests</p>'}
+                </div>
+                
+                <div class="guest-status-section">
+                    <h4><i class="fas fa-clock" style="color: var(--warning-yellow);"></i> Pending Guests (${pendingGuests.length})</h4>
+                    ${pendingGuests.length > 0 ? pendingGuests.map(g => `
+                        <div class="guest-detail">
+                            <strong>${g.guest_name}</strong>
+                            <div class="guest-meta">
+                                <small>Requested: ${new Date(g.requested_at).toLocaleString()}</small>
+                                <small>IP: ${g.guest_ip || 'Unknown'}</small>
+                            </div>
+                        </div>
+                    `).join('') : '<p>No pending guests</p>'}
+                </div>
+                
+                ${rejectedGuests.length > 0 ? `
+                <div class="guest-status-section">
+                    <h4><i class="fas fa-times-circle" style="color: var(--danger-red);"></i> Rejected Guests (${rejectedGuests.length})</h4>
+                    ${rejectedGuests.map(g => `
+                        <div class="guest-detail">
+                            <strong>${g.guest_name}</strong>
+                            <div class="guest-meta">
+                                <small>Rejected: ${new Date(g.left_at).toLocaleString()}</small>
+                                <small>IP: ${g.guest_ip || 'Unknown'}</small>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                ` : ''}
+                
+                ${leftGuests.length > 0 ? `
+                <div class="guest-status-section">
+                    <h4><i class="fas fa-sign-out-alt" style="color: var(--text-secondary);"></i> Guests Who Left (${leftGuests.length})</h4>
+                    ${leftGuests.map(g => `
+                        <div class="guest-detail">
+                            <strong>${g.guest_name}</strong>
+                            <div class="guest-meta">
+                                <small>Left: ${new Date(g.left_at).toLocaleString()}</small>
+                                <small>IP: ${g.guest_ip || 'Unknown'}</small>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                ` : ''}
+            </div>
+        `;
+        
+        // Create a modal to show guest details
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 600px; max-height: 80vh;">
+                <div class="modal-header">
+                    <h2><i class="fas fa-users"></i> Session Guests</h2>
+                    <button class="btn btn-secondary btn-small close-guest-modal">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                </div>
+                <div class="modal-body" style="overflow-y: auto;">
+                    ${guestInfo}
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Add close handler
+        modal.querySelector('.close-guest-modal').addEventListener('click', () => {
+            modal.remove();
+        });
+        
+        // Close when clicking outside
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+        
+    } catch (error) {
+        console.error("Error loading session guests:", error);
+        alert("Failed to load guest details: " + error.message);
+    }
+}
+
+// Add this to your global functions
+window.showSessionGuests = showSessionGuests;
+
+// Helper function to add CSS styles for session cards
+function addSessionCardStyles() {
+    // Check if styles are already added
+    if (document.getElementById('session-card-styles')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'session-card-styles';
+    style.textContent = `
+        .session-header-left {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .session-stats {
+            display: flex;
+            gap: 10px;
+            font-size: 12px;
+        }
+        
+        .guest-count {
+            color: var(--success-green);
+            background: rgba(78, 205, 196, 0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .pending-count {
+            color: var(--warning-yellow);
+            background: rgba(255, 209, 102, 0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .session-info-section {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .session-info-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .guest-details-modal {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .guest-status-section {
+            background: rgba(21, 33, 62, 0.5);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 3px solid;
+        }
+        
+        .guest-status-section h4 {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .guest-detail {
+            background: rgba(15, 52, 96, 0.3);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .guest-detail:last-child {
+            margin-bottom: 0;
+        }
+        
+        .guest-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        
+        .btn-info {
+            background: linear-gradient(135deg, var(--info-blue), #1e90ff);
+            color: white;
+            box-shadow: 0 4px 15px rgba(17, 138, 178, 0.3);
+        }
+        
+        .btn-info:hover {
+            background: linear-gradient(135deg, #1e90ff, var(--info-blue));
+            box-shadow: 0 8px 25px rgba(17, 138, 178, 0.4);
+        }
+    `;
+    
+    document.head.appendChild(style);
+}
+// Show active guests
+async function showActiveGuests() {
+    try {
+        const { data: activeGuests, error } = await supabaseClient
+            .from('session_guests')
+            .select('guest_name, approved_at')
+            .eq('session_id', appState.currentSessionId)
+            .eq('status', 'approved')
+            .order('approved_at', { ascending: true });
+        
+        if (error) throw error;
+        
+        let message = "Active guests in this session:\n";
+        if (activeGuests && activeGuests.length > 0) {
+            activeGuests.forEach((guest, index) => {
+                message += `${index + 1}. ${guest.guest_name} (Joined: ${new Date(guest.approved_at).toLocaleTimeString()})\n`;
+            });
+        } else {
+            message = "No active guests in this session.";
+        }
+        
+        alert(message);
+    } catch (error) {
+        console.error("Error fetching active guests:", error);
+    }
+}
+
 
 // View session history
 async function viewSessionHistory(sessionId) {
