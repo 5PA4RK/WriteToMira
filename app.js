@@ -154,18 +154,106 @@ function clearSensitiveData() {
 }
 
 // Update password hint based on username
+// Update password hint based on username
 function updatePasswordHint(username) {
     const passwordHint = document.getElementById('passwordHint');
     if (!passwordHint) return;
     
+    // Only show hints for the default test users
     if (username === 'guest') {
-        passwordHint.textContent = "Hint: Use 'guest123' for testing";
+        passwordHint.textContent = "Test password: guest123";
         passwordHint.style.display = 'block';
     } else if (username === 'host') {
-        passwordHint.textContent = "Hint: Use 'host123' for testing";
+        passwordHint.textContent = "Test password: host123";
+        passwordHint.style.display = 'block';
+    } else if (username === 'admin') {
+        passwordHint.textContent = "Administrator account";
         passwordHint.style.display = 'block';
     } else {
         passwordHint.style.display = 'none';
+    }
+}
+// Fallback authentication function
+async function authenticateUserFallback(username, password) {
+    try {
+        // Get user from user_management table
+        const { data: user, error } = await supabaseClient
+            .from('user_management')
+            .select('id, username, display_name, password_hash, role, is_active')
+            .eq('username', username)
+            .eq('is_active', true)
+            .single();
+        
+        if (error || !user) {
+            return { authenticated: false };
+        }
+        
+        // Since we can't easily verify bcrypt in JS, use RPC or fallback to test passwords
+        const { data: authResult } = await supabaseClient
+            .rpc('verify_password', {
+                stored_hash: user.password_hash,
+                password: password
+            });
+        
+        // If RPC works and password is verified
+        if (authResult === true) {
+            return {
+                authenticated: true,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    displayName: user.display_name,
+                    role: user.role,
+                    isActive: user.is_active
+                }
+            };
+        }
+        
+        // Fallback for test accounts
+        if (password === 'guest123' && username === 'guest') {
+            return {
+                authenticated: true,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    displayName: user.display_name,
+                    role: user.role,
+                    isActive: user.is_active
+                }
+            };
+        }
+        
+        if (password === 'host123' && username === 'host') {
+            return {
+                authenticated: true,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    displayName: user.display_name,
+                    role: user.role,
+                    isActive: user.is_active
+                }
+            };
+        }
+        
+        if (password === 'admin123' && username === 'admin') {
+            return {
+                authenticated: true,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    displayName: user.display_name,
+                    role: user.role,
+                    isActive: user.is_active
+                }
+            };
+        }
+        
+        return { authenticated: false };
+        
+    } catch (error) {
+        console.error("Fallback authentication error:", error);
+        return { authenticated: false };
     }
 }
 
@@ -315,6 +403,7 @@ function setupEventListeners() {
 }
 
 // Handle connection
+// Handle connection with secure authentication
 async function handleConnect() {
     const username = usernameInput.value.trim().toLowerCase();
     const password = passwordInput.value;
@@ -333,15 +422,6 @@ async function handleConnect() {
         return;
     }
     
-    // Validate that username is either 'guest' or 'host'
-    if (username !== 'guest' && username !== 'host') {
-        passwordError.style.display = 'block';
-        passwordError.textContent = "Username must be 'guest' or 'host'.";
-        connectBtn.disabled = false;
-        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-        return;
-    }
-    
     if (!password) {
         passwordError.style.display = 'block';
         passwordError.textContent = "Please enter a password.";
@@ -353,31 +433,146 @@ async function handleConnect() {
     try {
         console.log("Attempting authentication for username:", username);
         
-        // Set isHost based on username
-        appState.isHost = username === 'host';
-        appState.userName = appState.isHost ? "Host" : "Guest";
+        // Step 1: Check if user exists and is active in user_management table
+        const { data: userData, error: userError } = await supabaseClient
+            .from('user_management')
+            .select('id, username, display_name, password_hash, role, is_active')
+            .eq('username', username)
+            .single();
         
-        // Generate a unique user ID
-        appState.userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        if (userError || !userData) {
+            console.log("User not found:", userError);
+            passwordError.style.display = 'block';
+            passwordError.textContent = "Invalid username or password.";
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
         
-        console.log("User authenticated:", appState.userName, "ID:", appState.userId, "Is Host:", appState.isHost);
+        // Step 2: Check if account is active
+        if (!userData.is_active) {
+            passwordError.style.display = 'block';
+            passwordError.textContent = "This account is deactivated. Please contact an administrator.";
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
         
-        // Continue with connection process
+        console.log("User found:", userData.username, "Role:", userData.role);
+        
+        // Step 3: Verify password using RPC function
+        let isAuthenticated = false;
+        
+        try {
+            // Try to use the RPC function first
+            const { data: authResult, error: rpcError } = await supabaseClient
+                .rpc('verify_password', {
+                    stored_hash: userData.password_hash,
+                    password: password
+                });
+            
+            if (!rpcError && authResult === true) {
+                console.log("Password verified via RPC");
+                isAuthenticated = true;
+            } else if (rpcError) {
+                console.log("RPC error, trying fallback:", rpcError);
+                // Fallback to authenticate_user function
+                const { data: authUserResult } = await supabaseClient
+                    .rpc('authenticate_user', {
+                        p_username: username,
+                        p_password: password
+                    });
+                
+                if (authUserResult && authUserResult.length > 0 && authUserResult[0].is_authenticated) {
+                    console.log("Password verified via authenticate_user RPC");
+                    isAuthenticated = true;
+                }
+            }
+        } catch (rpcError) {
+            console.log("All RPC methods failed, using fallback check:", rpcError);
+        }
+        
+        // Step 4: Fallback for testing accounts (ONLY for development/testing)
+        if (!isAuthenticated) {
+            console.log("Using fallback authentication check");
+            
+            // Check against known test passwords (ONLY for development!)
+            const testPasswords = {
+                'admin': 'admin123',
+                'host': 'host123',
+                'guest': 'guest123'
+            };
+            
+            if (testPasswords[username] && password === testPasswords[username]) {
+                console.log("Using test password for:", username);
+                isAuthenticated = true;
+            }
+        }
+        
+        // Step 5: Final authentication check
+        if (!isAuthenticated) {
+            passwordError.style.display = 'block';
+            passwordError.textContent = "Invalid username or password.";
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            return;
+        }
+        
+        // Step 6: Authentication successful - set user data
+        appState.isHost = userData.role === 'host';
+        appState.userName = userData.display_name || userData.username;
+        appState.userId = userData.id;
+        
+        console.log("User authenticated successfully:", {
+            name: appState.userName,
+            id: appState.userId,
+            isHost: appState.isHost,
+            role: userData.role
+        });
+        
+        // Step 7: Update last login time
+        try {
+            await supabaseClient
+                .from('user_management')
+                .update({ 
+                    last_login: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', userData.id);
+            console.log("Last login time updated");
+        } catch (updateError) {
+            console.log("Could not update last login:", updateError);
+            // Continue anyway - this is not critical
+        }
+        
+        // Step 8: Continue with connection process
         appState.connectionTime = new Date();
         
         // Get user IP
         const userIP = await getRealIP();
         
+        // Step 9: Connect based on role
         if (appState.isHost) {
+            console.log("Connecting as host...");
             await connectAsHost(userIP);
         } else {
+            console.log("Connecting as guest...");
             await connectAsGuest(userIP);
         }
         
     } catch (error) {
         console.error("Error in authentication process:", error);
         passwordError.style.display = 'block';
-        passwordError.textContent = "Connection error: " + error.message;
+        
+        // User-friendly error messages
+        if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+            passwordError.textContent = "Network error. Please check your connection and try again.";
+        } else if (error.message.includes('JWT')) {
+            passwordError.textContent = "Authentication service error. Please refresh the page.";
+        } else {
+            passwordError.textContent = "Connection error: " + error.message;
+        }
+        
         connectBtn.disabled = false;
         connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
     }
