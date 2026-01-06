@@ -67,19 +67,6 @@ const imageModal = document.getElementById('imageModal');
 const fullSizeImage = document.getElementById('fullSizeImage');
 
 // Modal control functions (same as original)
-function showConnectionModal() {
-    connectionModal.style.display = 'flex';
-    connectionModal.classList.add('show');
-    document.body.classList.add('modal-open');
-    
-    const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
-    if (mainContainer) {
-        mainContainer.style.display = 'none';
-    }
-    
-    clearSensitiveData();
-}
-
 function hideConnectionModal() {
     connectionModal.style.display = 'none';
     connectionModal.classList.remove('show');
@@ -109,7 +96,7 @@ function clearSensitiveData() {
     }
 }
 
-// Initialize the app
+// Update initApp to call setupEventListeners after DOM is ready
 async function initApp() {
     const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
     if (mainContainer) {
@@ -149,63 +136,116 @@ async function initApp() {
     populateEmojis();
     loadChatSessions();
 }
+// Reset modal inputs when showing connection modal
+function showConnectionModal() {
+    connectionModal.style.display = 'flex';
+    connectionModal.classList.add('show');
+    document.body.classList.add('modal-open');
+    
+    const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
+    if (mainContainer) {
+        mainContainer.style.display = 'none';
+    }
+    
+    // Reset inputs
+    document.getElementById('usernameInput').value = '';
+    document.getElementById('passwordInput').value = '';
+    document.getElementById('passwordError').style.display = 'none';
+    document.getElementById('passwordHint').style.display = 'none';
+    
+    connectBtn.disabled = false;
+    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+    
+    clearSensitiveData();
+}
 
 // Set up all event listeners
 function setupEventListeners() {
     // Connection modal
-    const userSelect = document.getElementById('userSelect');
-    const passwordInput = document.getElementById('passwordInput');
+    if (usernameInput) {
+        usernameInput.addEventListener('input', function() {
+            if (passwordError) passwordError.style.display = 'none';
+            updatePasswordHint(this.value.toLowerCase());
+        });
+    }
     
-    userSelect.addEventListener('change', function() {
-        document.getElementById('passwordError').style.display = 'none';
-    });
+    if (passwordInput) {
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleConnect();
+        });
+    }
     
-    passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleConnect();
-    });
-    
-    connectBtn.addEventListener('click', handleConnect);
+    if (connectBtn) {
+        connectBtn.addEventListener('click', handleConnect); // Fixed: removed extra quote
+    }
     
     // Logout
-    logoutBtn.addEventListener('click', handleLogout);
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
     
     // Pending guests
-    pendingGuestsBtn.addEventListener('click', showPendingGuests);
-    closePendingModal.addEventListener('click', () => {
-        pendingGuestsModal.style.display = 'none';
-    });
+    if (pendingGuestsBtn) {
+        pendingGuestsBtn.addEventListener('click', showPendingGuests);
+    }
+    
+    if (closePendingModal) {
+        closePendingModal.addEventListener('click', () => {
+            pendingGuestsModal.style.display = 'none';
+        });
+    }
     
     // Chat functionality
-    messageInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
+    if (messageInput) {
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        messageInput.addEventListener('input', handleTyping);
+    }
     
-    messageInput.addEventListener('input', handleTyping);
-    sendMessageBtn.addEventListener('click', sendMessage);
-    clearChatBtn.addEventListener('click', clearChat);
+    if (sendMessageBtn) {
+        sendMessageBtn.addEventListener('click', sendMessage);
+    }
+    
+    if (clearChatBtn) {
+        clearChatBtn.addEventListener('click', clearChat);
+    }
     
     // Image upload
-    imageUpload.addEventListener('change', handleImageUpload);
+    if (imageUpload) {
+        imageUpload.addEventListener('change', handleImageUpload);
+    }
     
     // Emoji picker
-    emojiBtn.addEventListener('click', toggleEmojiPicker);
+    if (emojiBtn) {
+        emojiBtn.addEventListener('click', toggleEmojiPicker);
+    }
     
     // Return to active chat
-    returnToActiveBtn.addEventListener('click', returnToActiveChat);
+    if (returnToActiveBtn) {
+        returnToActiveBtn.addEventListener('click', returnToActiveChat);
+    }
     
     // History
-    refreshHistoryBtn.addEventListener('click', loadChatSessions);
+    if (refreshHistoryBtn) {
+        refreshHistoryBtn.addEventListener('click', loadChatSessions);
+    }
     
     // Sound control
-    soundControl.addEventListener('click', toggleSound);
+    if (soundControl) {
+        soundControl.addEventListener('click', toggleSound);
+    }
     
     // Image modal
-    imageModal.addEventListener('click', () => {
-        imageModal.style.display = 'none';
-    });
+    if (imageModal) {
+        imageModal.addEventListener('click', () => {
+            imageModal.style.display = 'none';
+        });
+    }
     
     // Click outside emoji picker to close
     document.addEventListener('click', (e) => {
@@ -216,18 +256,19 @@ function setupEventListeners() {
     
     // Prevent background scrolling when modal is open
     document.addEventListener('touchmove', function(e) {
-        if (connectionModal.style.display === 'flex' || connectionModal.classList.contains('show')) {
+        if (connectionModal && (connectionModal.style.display === 'flex' || connectionModal.classList.contains('show'))) {
             e.preventDefault();
         }
     }, { passive: false });
 }
 
 // Handle connection - SIMPLIFIED VERSION FOR TESTING
+// Handle connection - UPDATED FOR DIRECT USERNAME INPUT
 async function handleConnect() {
-    const userSelect = document.getElementById('userSelect');
+    const usernameInput = document.getElementById('usernameInput');
     const passwordInput = document.getElementById('passwordInput');
     
-    const selectedRole = userSelect.value;
+    const username = usernameInput.value.trim().toLowerCase();
     const password = passwordInput.value;
     
     // Reset error
@@ -236,9 +277,18 @@ async function handleConnect() {
     connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
     
     // Validate inputs
-    if (!selectedRole) {
+    if (!username) {
         passwordError.style.display = 'block';
-        passwordError.textContent = "Please select a role.";
+        passwordError.textContent = "Please enter a username.";
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+        return;
+    }
+    
+    // Validate that username is either 'guest' or 'host'
+    if (username !== 'guest' && username !== 'host') {
+        passwordError.style.display = 'block';
+        passwordError.textContent = "Username must be 'guest' or 'host'.";
         connectBtn.disabled = false;
         connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
         return;
@@ -253,11 +303,10 @@ async function handleConnect() {
     }
     
     try {
-        console.log("Attempting authentication for role:", selectedRole);
+        console.log("Attempting authentication for username:", username);
         
-        // For now, use simple password check (we'll fix the RPC function)
-        // Set isHost based on selected role
-        appState.isHost = selectedRole === 'host';
+        // Set isHost based on username
+        appState.isHost = username === 'host';
         appState.userName = appState.isHost ? "Host" : "Guest";
         
         // Generate a unique user ID
