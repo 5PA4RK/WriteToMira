@@ -153,7 +153,26 @@ function clearSensitiveData() {
     }
 }
 
-
+// Update password hint based on username
+// Update password hint based on username
+function updatePasswordHint(username) {
+    const passwordHint = document.getElementById('passwordHint');
+    if (!passwordHint) return;
+    
+    // Only show hints for the default test users
+    if (username === 'guest') {
+        passwordHint.textContent = "Test password: guest123";
+        passwordHint.style.display = 'block';
+    } else if (username === 'host') {
+        passwordHint.textContent = "Test password: host123";
+        passwordHint.style.display = 'block';
+    } else if (username === 'admin') {
+        passwordHint.textContent = "Administrator account";
+        passwordHint.style.display = 'block';
+    } else {
+        passwordHint.style.display = 'none';
+    }
+}
 // Fallback authentication function
 async function authenticateUserFallback(username, password) {
     try {
@@ -170,7 +189,11 @@ async function authenticateUserFallback(username, password) {
         }
         
         // Since we can't easily verify bcrypt in JS, use RPC or fallback to test passwords
-const authResult = (userData.password_hash === password);
+        const { data: authResult } = await supabaseClient
+            .rpc('verify_password', {
+                stored_hash: user.password_hash,
+                password: password
+            });
         
         // If RPC works and password is verified
         if (authResult === true) {
@@ -282,7 +305,7 @@ function setupEventListeners() {
     if (usernameInput) {
         usernameInput.addEventListener('input', function() {
             if (passwordError) passwordError.style.display = 'none';
-            updatePasswordHint(this.value);
+            updatePasswordHint(this.value.toLowerCase());
         });
     }
     
@@ -382,7 +405,7 @@ function setupEventListeners() {
 // Handle connection
 // Handle connection with secure authentication
 async function handleConnect() {
-    const username = usernameInput.value.trim();
+    const username = usernameInput.value.trim().toLowerCase();
     const password = passwordInput.value;
     
     // Reset error
