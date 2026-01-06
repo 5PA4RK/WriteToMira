@@ -474,13 +474,51 @@ async function handleConnect() {
         console.log("Attempting authentication for username:", username);
         
         // Step 1: Check if user exists and is active in user_management table
+// Step 1: Check if user exists and is active in user_management table
+console.log("Searching for username (case-insensitive):", username);
 
-        const { data: userData, error: userError } = await supabaseClient
-        .from('user_management')
-        .select('id, username, display_name, password_hash, role, is_active')
-        .ilike('username', username)  // ← CHANGE THIS from .eq() to .ilike()
-        .eq('is_active', true)
-        .single();
+// First, try to get all matching users to see what's in the database
+const { data: allMatchingUsers, error: searchError } = await supabaseClient
+    .from('user_management')
+    .select('id, username, display_name, password_hash, role, is_active')
+    .ilike('username', username);
+
+console.log("All matching users found:", allMatchingUsers);
+
+if (searchError) {
+    console.error("Error searching for user:", searchError);
+    passwordError.style.display = 'block';
+    passwordError.textContent = "Database error. Please try again.";
+    connectBtn.disabled = false;
+    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+    return;
+}
+
+if (!allMatchingUsers || allMatchingUsers.length === 0) {
+    console.log("No users found with username:", username);
+    passwordError.style.display = 'block';
+    passwordError.textContent = "Invalid username or password.";
+    connectBtn.disabled = false;
+    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+    return;
+}
+
+// Filter to get only active users
+const activeUsers = allMatchingUsers.filter(user => user.is_active);
+console.log("Active users:", activeUsers);
+
+if (activeUsers.length === 0) {
+    console.log("User found but not active");
+    passwordError.style.display = 'block';
+    passwordError.textContent = "This account is deactivated. Please contact an administrator.";
+    connectBtn.disabled = false;
+    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+    return;
+}
+
+// If multiple active users with same username (different cases), use the first one
+const userData = activeUsers[0];
+console.log("Selected user:", userData);
         
         if (userError || !userData) {
             console.log("User not found:", userError);
