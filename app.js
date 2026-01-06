@@ -807,15 +807,15 @@ async function connectAsGuest(userIP) {
         
         // Add to pending guests in session_guests table
         const { error: insertError } = await supabaseClient
-            .from('session_guests')
-            .insert([{
-                session_id: session.session_id,
-                guest_id: appState.userId,
-                guest_name: appState.userName,
-                guest_ip: userIP,
-                status: 'pending',
-                requested_at: new Date().toISOString()
-            }]);
+        .from('session_guests')
+        .insert([{
+            session_id: session.session_id,
+            guest_id: appState.userId,
+            guest_name: appState.userName,
+            guest_ip: userIP,
+            status: 'pending',
+            requested_at: new Date().toISOString()
+        }]);
         
         if (insertError) {
             console.error("Error adding to pending:", insertError);
@@ -841,6 +841,7 @@ async function connectAsGuest(userIP) {
     }
 }
 
+
 // Set up subscription for pending guests (for host)
 function setupPendingGuestsSubscription() {
     if (appState.pendingSubscription) {
@@ -857,14 +858,120 @@ function setupPendingGuestsSubscription() {
                 table: 'session_guests',
                 filter: 'session_id=eq.' + appState.currentSessionId + 'AND status=eq.pending'
             },
-            (payload) => {
-                console.log('Pending guests update:', payload);
-                loadPendingGuests(); // Reload pending guests
+            async (payload) => {
+                console.log('Pending guests update received:', payload);
+                
+                // Reload pending guests
+                await loadPendingGuests();
+                
+                // If modal is open, refresh it
+                if (pendingGuestsModal.style.display === 'flex') {
+                    showPendingGuests();
+                }
+                
+                // Show notification for new pending guests
+                if (payload.eventType === 'INSERT') {
+                    showNewGuestNotification(payload.new);
+                }
             }
         )
         .subscribe((status) => {
             console.log('Pending guests subscription status:', status);
+            if (status === 'SUBSCRIBED') {
+                console.log('Successfully subscribed to pending guests');
+            }
         });
+}
+// Show notification for new pending guest
+function showNewGuestNotification(guest) {
+    if (!appState.isHost) return;
+    
+    // Create notification
+    const notification = document.createElement('div');
+    notification.className = 'guest-notification';
+    notification.innerHTML = `
+        <div class="notification-content">
+            <i class="fas fa-user-plus"></i>
+            <div class="notification-text">
+                <strong>New guest request!</strong>
+                <small>${guest.guest_name} wants to join the chat</small>
+            </div>
+            <button class="btn btn-small btn-success" onclick="viewPendingGuests()">
+                <i class="fas fa-eye"></i> View
+            </button>
+        </div>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 10 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 10000);
+    
+    // Add CSS for notification
+    if (!document.getElementById('guest-notification-styles')) {
+        const style = document.createElement('style');
+        style.id = 'guest-notification-styles';
+        style.textContent = `
+            .guest-notification {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, var(--card-bg), var(--darker-bg));
+                border: 1px solid var(--accent-secondary);
+                border-radius: 12px;
+                padding: 15px;
+                z-index: 9999;
+                box-shadow: 0 8px 32px rgba(138, 43, 226, 0.3);
+                animation: slideInRight 0.3s ease, fadeOut 0.3s ease 9.7s;
+                max-width: 350px;
+                backdrop-filter: blur(10px);
+            }
+            
+            @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+            
+            .notification-content {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            
+            .notification-content i {
+                font-size: 24px;
+                color: var(--accent-light);
+            }
+            
+            .notification-text {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// Helper function to view pending guests
+function viewPendingGuests() {
+    showPendingGuests();
+    
+    // Remove any notifications
+    document.querySelectorAll('.guest-notification').forEach(notification => {
+        notification.remove();
+    });
 }
 
 // Set up subscription for pending approval (for guest)
@@ -1585,64 +1692,110 @@ async function loadPendingGuests() {
             .eq('status', 'pending')
             .order('requested_at', { ascending: true });
         
-        if (error) throw error;
+        if (error) {
+            console.error("Error loading pending guests:", error);
+            appState.pendingGuests = [];
+            return;
+        }
         
         appState.pendingGuests = guests || [];
+        
+        console.log("Loaded pending guests:", appState.pendingGuests.length, guests);
         
         // Update the button visibility and count
         if (pendingGuestsBtn && pendingCount) {
             pendingCount.textContent = appState.pendingGuests.length;
             if (appState.pendingGuests.length > 0) {
                 pendingGuestsBtn.style.display = 'flex';
+                pendingGuestsBtn.classList.add('has-pending');
             } else {
                 pendingGuestsBtn.style.display = 'none';
+                pendingGuestsBtn.classList.remove('has-pending');
             }
         }
     } catch (error) {
-        console.error("Error loading pending guests:", error);
+        console.error("Error in loadPendingGuests:", error);
+        appState.pendingGuests = [];
+        
+        if (pendingGuestsBtn && pendingCount) {
+            pendingCount.textContent = '0';
+            pendingGuestsBtn.style.display = 'none';
+        }
     }
 }
 
 // Show pending guests modal
+// Show pending guests modal
 async function showPendingGuests() {
+    if (!pendingGuestsList) return;
+    
     pendingGuestsList.innerHTML = '';
     
-    if (appState.pendingGuests.length === 0) {
-        noPendingGuests.style.display = 'block';
-    } else {
-        noPendingGuests.style.display = 'none';
+    try {
+        // Load fresh pending guests data
+        await loadPendingGuests();
         
-        appState.pendingGuests.forEach((guest, index) => {
-            const guestDiv = document.createElement('div');
-            guestDiv.className = 'pending-guest';
-            guestDiv.innerHTML = `
-                <div class="guest-info">
-                    <strong>${guest.guest_name}</strong>
-                    <small>User ID: ${guest.guest_id.substring(0, 8)}...</small>
-                    <small>IP: ${guest.guest_ip || 'Unknown'}</small>
-                    <small>Requested: ${new Date(guest.requested_at).toLocaleTimeString()}</small>
-                </div>
-                <div class="guest-actions">
-                    <button class="btn btn-success btn-small" onclick="approveGuest(${index})">
-                        <i class="fas fa-check"></i> Approve
-                    </button>
-                    <button class="btn btn-danger btn-small" onclick="denyGuest(${index})">
-                        <i class="fas fa-times"></i> Deny
-                    </button>
-                </div>
-            `;
-            pendingGuestsList.appendChild(guestDiv);
-        });
+        if (appState.pendingGuests.length === 0) {
+            if (noPendingGuests) {
+                noPendingGuests.style.display = 'block';
+            }
+        } else {
+            if (noPendingGuests) {
+                noPendingGuests.style.display = 'none';
+            }
+            
+            appState.pendingGuests.forEach((guest, index) => {
+                const guestDiv = document.createElement('div');
+                guestDiv.className = 'pending-guest';
+                guestDiv.innerHTML = `
+                    <div class="guest-info">
+                        <div class="guest-name">
+                            <i class="fas fa-user"></i>
+                            <strong>${guest.guest_name}</strong>
+                        </div>
+                        <div class="guest-details">
+                            <small>User ID: ${guest.guest_id ? guest.guest_id.substring(0, 8) + '...' : 'N/A'}</small>
+                            <small>IP: ${guest.guest_ip || 'Unknown'}</small>
+                            <small>Requested: ${new Date(guest.requested_at).toLocaleString()}</small>
+                        </div>
+                    </div>
+                    <div class="guest-actions">
+                        <button class="btn btn-success btn-small" onclick="approveGuest('${guest.id}')" title="Approve this guest">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                        <button class="btn btn-danger btn-small" onclick="denyGuest('${guest.id}')" title="Deny this guest">
+                            <i class="fas fa-times"></i> Deny
+                        </button>
+                    </div>
+                `;
+                pendingGuestsList.appendChild(guestDiv);
+            });
+        }
+        
+        pendingGuestsModal.style.display = 'flex';
+        
+    } catch (error) {
+        console.error("Error showing pending guests:", error);
+        if (noPendingGuests) {
+            noPendingGuests.style.display = 'block';
+            noPendingGuests.innerHTML = 'Error loading pending guests';
+        }
     }
-    
-    pendingGuestsModal.style.display = 'flex';
 }
 
 // Approve a guest
-async function approveGuest(guestIndex) {
-    const guest = appState.pendingGuests[guestIndex];
-    
+// Approve a guest by guest record ID
+async function approveGuest(guestRecordId) {
     try {
+        // First get the guest details
+        const { data: guest, error: fetchError } = await supabaseClient
+            .from('session_guests')
+            .select('*')
+            .eq('id', guestRecordId)
+            .single();
+        
+        if (fetchError) throw fetchError;
+        
         // Update guest status to approved
         const { error } = await supabaseClient
             .from('session_guests')
@@ -1650,14 +1803,14 @@ async function approveGuest(guestIndex) {
                 status: 'approved',
                 approved_at: new Date().toISOString()
             })
-            .eq('id', guest.id);
+            .eq('id', guestRecordId);
         
         if (error) throw error;
         
-        // Remove from pending list in state
-        appState.pendingGuests = appState.pendingGuests.filter((_, i) => i !== guestIndex);
+        // Update the pending list
+        appState.pendingGuests = appState.pendingGuests.filter(g => g.id !== guestRecordId);
         
-        // Update button
+        // Update UI
         if (pendingCount) {
             pendingCount.textContent = appState.pendingGuests.length;
             if (appState.pendingGuests.length === 0) {
@@ -1665,14 +1818,61 @@ async function approveGuest(guestIndex) {
             }
         }
         
+        // Refresh the modal display
         showPendingGuests();
         
         // Send system message
         await saveMessageToDB('System', `${guest.guest_name} has been approved and joined the chat.`);
         
+        // Update active guests count
+        updateActiveGuestsCount();
+        
     } catch (error) {
         console.error("Error approving guest:", error);
         alert("Failed to approve guest: " + error.message);
+    }
+}
+
+// Deny a guest by guest record ID
+async function denyGuest(guestRecordId) {
+    try {
+        // First get the guest details
+        const { data: guest, error: fetchError } = await supabaseClient
+            .from('session_guests')
+            .select('*')
+            .eq('id', guestRecordId)
+            .single();
+        
+        if (fetchError) throw fetchError;
+        
+        // Update guest status to rejected
+        const { error } = await supabaseClient
+            .from('session_guests')
+            .update({
+                status: 'rejected',
+                left_at: new Date().toISOString()
+            })
+            .eq('id', guestRecordId);
+        
+        if (error) throw error;
+        
+        // Update the pending list
+        appState.pendingGuests = appState.pendingGuests.filter(g => g.id !== guestRecordId);
+        
+        // Update UI
+        if (pendingCount) {
+            pendingCount.textContent = appState.pendingGuests.length;
+            if (appState.pendingGuests.length === 0) {
+                pendingGuestsBtn.style.display = 'none';
+            }
+        }
+        
+        // Refresh the modal display
+        showPendingGuests();
+        
+    } catch (error) {
+        console.error("Error denying guest:", error);
+        alert("Failed to deny guest: " + error.message);
     }
 }
 
