@@ -153,8 +153,25 @@
                 </div>
             </section>
 
-            <!-- History Section -->
-            <section class="history-section" id="historySection">
+
+        </div>
+    </div>
+
+<!-- Add this right after the chat-section -->
+<div class="admin-panel" id="adminSection" style="display: none;">
+    <div class="admin-tabs">
+        <button id="historyTabBtn" class="admin-tab active">
+            <i class="fas fa-history"></i> Chat Sessions
+        </button>
+        <button id="usersTabBtn" class="admin-tab">
+            <i class="fas fa-users-cog"></i> User Management
+        </button>
+    </div>
+    
+    <div class="admin-tab-content">
+        <div id="historyTabContent" class="tab-pane active">
+            <!-- This will contain the history cards -->
+            <div class="history-section">
                 <div class="section-header">
                     <h2><i class="fas fa-history"></i> Chat Sessions</h2>
                     <button id="refreshHistoryBtn" class="btn btn-small">
@@ -164,9 +181,34 @@
                 <div class="history-cards" id="historyCards">
                     <!-- Session cards will be populated here -->
                 </div>
-            </section>
+            </div>
+        </div>
+        
+        <div id="usersTabContent" class="tab-pane">
+            <!-- This will contain the user management -->
+            <div class="user-management-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-users-cog"></i> User Management</h2>
+                </div>
+                
+                <div class="user-management-controls">
+                    <button id="addUserBtn" class="btn btn-success">
+                        <i class="fas fa-user-plus"></i> Add New User
+                    </button>
+                    <div class="search-box">
+                        <input type="text" id="userSearchInput" placeholder="Search users..." class="form-input">
+                        <i class="fas fa-search"></i>
+                    </div>
+                </div>
+                
+                <div class="users-list" id="usersList">
+                    <!-- Users will be populated here -->
+                </div>
+            </div>
         </div>
     </div>
+</div>
+
 
     <!-- Add this after the history-cards div -->
 <div class="user-management-section" id="userManagementSection" style="display: none;">
