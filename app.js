@@ -265,6 +265,7 @@ async function authenticateUserFallback(username, password) {
 
 // Initialize the app
 async function initApp() {
+    localStorage.removeItem('writeToMe_session');
     const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
     if (mainContainer) {
         mainContainer.style.display = 'none';
@@ -698,7 +699,6 @@ async function connectAsHost(userIP) {
 }
 
 // Connect as guest
-// Connect as guest
 async function connectAsGuest(userIP) {
     try {
         // First check if there's an active session
@@ -755,54 +755,49 @@ async function connectAsGuest(userIP) {
             .select('*')
             .eq('session_id', session.session_id)
             .eq('guest_id', appState.userId)
-            .eq('status', 'approved')
             .single();
         
         if (existingGuest && !existingError) {
-            // Guest is already approved - direct connection
-            console.log("Guest already approved, connecting directly");
-            appState.sessionId = session.session_id;
-            appState.currentSessionId = session.session_id;
-            appState.isConnected = true;
-            
-            localStorage.setItem('writeToMe_session', JSON.stringify({
-                isHost: appState.isHost,
-                userName: appState.userName,
-                userId: appState.userId,
-                sessionId: appState.sessionId,
-                connectionTime: appState.connectionTime,
-                soundEnabled: appState.soundEnabled
-            }));
-            
-            hideConnectionModal();
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            updateUIAfterConnection();
-            setupRealtimeSubscriptions();
-            loadChatHistory();
-            loadChatSessions();
-            return;
-        }
-        
-        // Check if already in pending list
-        const { data: pendingGuest, error: pendingError } = await supabaseClient
-            .from('session_guests')
-            .select('*')
-            .eq('session_id', session.session_id)
-            .eq('guest_id', appState.userId)
-            .eq('status', 'pending')
-            .single();
-        
-        if (pendingGuest && !pendingError) {
-            // Already pending
-            console.log("Guest already pending");
-            appState.sessionId = session.session_id;
-            hideConnectionModal();
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-            updateUIForPendingGuest();
-            setupPendingApprovalSubscription(session.session_id);
-            return;
+            if (existingGuest.status === 'approved') {
+                // Guest is already approved - direct connection
+                console.log("Guest already approved, connecting directly");
+                appState.sessionId = session.session_id;
+                appState.currentSessionId = session.session_id;
+                appState.isConnected = true;
+                
+                localStorage.setItem('writeToMe_session', JSON.stringify({
+                    isHost: appState.isHost,
+                    userName: appState.userName,
+                    userId: appState.userId,
+                    sessionId: appState.sessionId,
+                    connectionTime: appState.connectionTime,
+                    soundEnabled: appState.soundEnabled
+                }));
+                
+                hideConnectionModal();
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                updateUIAfterConnection();
+                setupRealtimeSubscriptions();
+                loadChatHistory();
+                loadChatSessions();
+                return;
+            } else if (existingGuest.status === 'pending') {
+                // Already pending
+                console.log("Guest already pending");
+                appState.sessionId = session.session_id;
+                hideConnectionModal();
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                updateUIForPendingGuest();
+                setupPendingApprovalSubscription(session.session_id);
+                return;
+            } else if (existingGuest.status === 'rejected') {
+                alert("Your previous access request was rejected. Please contact the host.");
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+                return;
+            }
         }
         
         // Add to pending guests in session_guests table
@@ -843,6 +838,8 @@ async function connectAsGuest(userIP) {
 
 // Set up subscription for pending guests (for host)
 function setupPendingGuestsSubscription() {
+    if (!appState.isHost || !appState.currentSessionId) return;
+    
     if (appState.pendingSubscription) {
         supabaseClient.removeChannel(appState.pendingSubscription);
     }
@@ -859,7 +856,7 @@ function setupPendingGuestsSubscription() {
             },
             (payload) => {
                 console.log('Pending guests update:', payload);
-                loadPendingGuests(); // Reload pending guests
+                loadPendingGuests(); // Reload pending guests when there's a change
             }
         )
         .subscribe((status) => {
@@ -867,6 +864,7 @@ function setupPendingGuestsSubscription() {
         });
 }
 
+// Set up subscription for pending approval (for guest)
 // Set up subscription for pending approval (for guest)
 function setupPendingApprovalSubscription(sessionId) {
     if (appState.pendingSubscription) {
@@ -886,7 +884,7 @@ function setupPendingApprovalSubscription(sessionId) {
             async (payload) => {
                 console.log('Pending approval payload:', payload);
                 
-                if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+                if (payload.eventType === 'UPDATE') {
                     const guest = payload.new || {};
                     
                     if (guest.status === 'approved') {
@@ -905,6 +903,7 @@ function setupPendingApprovalSubscription(sessionId) {
                         
                         updateUIAfterConnection();
                         setupRealtimeSubscriptions();
+                        setupActiveGuestsSubscription();
                         await loadChatHistory();
                         
                         if (appState.pendingSubscription) {
@@ -954,29 +953,43 @@ async function reconnectToSession() {
         console.log("Reconnecting - Session found:", session.session_id);
         console.log("Our user ID:", appState.userId);
         console.log("Session host ID:", session.host_id);
-        console.log("Session guest ID:", session.guest_id);
         
         if (appState.isHost) {
             if (session.host_id === appState.userId) {
                 appState.currentSessionId = session.session_id;
                 setupRealtimeSubscriptions();
+                setupPendingGuestsSubscription();
+                setupActiveGuestsSubscription();
+                loadPendingGuests();
+                updateActiveGuestsCount();
                 return true;
             }
             return false;
         } else {
-            if (session.guest_id === appState.userId) {
-                appState.currentSessionId = session.session_id;
-                setupRealtimeSubscriptions();
-                return true;
-            } else {
-                const isPending = session.pending_guests?.some(g => g.guest_id === appState.userId);
-                if (isPending) {
-                    updateUIForPendingGuest();
-                    setupPendingApprovalSubscription(session.session_id);
-                    return false;
-                }
+            // Check if guest is approved in session_guests table
+            const { data: guestRecord, error: guestError } = await supabaseClient
+                .from('session_guests')
+                .select('*')
+                .eq('session_id', session.session_id)
+                .eq('guest_id', appState.userId)
+                .single();
+            
+            if (guestError || !guestRecord) {
                 return false;
             }
+            
+            if (guestRecord.status === 'approved') {
+                appState.currentSessionId = session.session_id;
+                setupRealtimeSubscriptions();
+                setupActiveGuestsSubscription();
+                updateActiveGuestsCount();
+                return true;
+            } else if (guestRecord.status === 'pending') {
+                updateUIForPendingGuest();
+                setupPendingApprovalSubscription(session.session_id);
+                return false;
+            }
+            return false;
         }
     } catch (error) {
         console.error("Error reconnecting:", error);
@@ -1585,7 +1598,10 @@ async function loadPendingGuests() {
             .eq('status', 'pending')
             .order('requested_at', { ascending: true });
         
-        if (error) throw error;
+        if (error) {
+            console.error("Error loading pending guests:", error);
+            return;
+        }
         
         appState.pendingGuests = guests || [];
         
@@ -1605,6 +1621,11 @@ async function loadPendingGuests() {
 
 // Show pending guests modal
 async function showPendingGuests() {
+    if (!appState.isHost) return;
+    
+    // Load fresh data first
+    await loadPendingGuests();
+    
     pendingGuestsList.innerHTML = '';
     
     if (appState.pendingGuests.length === 0) {
@@ -1618,15 +1639,15 @@ async function showPendingGuests() {
             guestDiv.innerHTML = `
                 <div class="guest-info">
                     <strong>${guest.guest_name}</strong>
-                    <small>User ID: ${guest.guest_id.substring(0, 8)}...</small>
+                    <small>User ID: ${guest.guest_id ? guest.guest_id.substring(0, 8) + '...' : 'N/A'}</small>
                     <small>IP: ${guest.guest_ip || 'Unknown'}</small>
-                    <small>Requested: ${new Date(guest.requested_at).toLocaleTimeString()}</small>
+                    <small>Requested: ${new Date(guest.requested_at).toLocaleString()}</small>
                 </div>
                 <div class="guest-actions">
-                    <button class="btn btn-success btn-small" onclick="approveGuest(${index})">
+                    <button class="btn btn-success btn-small" onclick="approveGuest('${guest.id}', ${index})">
                         <i class="fas fa-check"></i> Approve
                     </button>
-                    <button class="btn btn-danger btn-small" onclick="denyGuest(${index})">
+                    <button class="btn btn-danger btn-small" onclick="denyGuest('${guest.id}', ${index})">
                         <i class="fas fa-times"></i> Deny
                     </button>
                 </div>
@@ -1639,9 +1660,7 @@ async function showPendingGuests() {
 }
 
 // Approve a guest
-async function approveGuest(guestIndex) {
-    const guest = appState.pendingGuests[guestIndex];
-    
+async function approveGuest(guestId, guestIndex) {
     try {
         // Update guest status to approved
         const { error } = await supabaseClient
@@ -1650,9 +1669,12 @@ async function approveGuest(guestIndex) {
                 status: 'approved',
                 approved_at: new Date().toISOString()
             })
-            .eq('id', guest.id);
+            .eq('id', guestId);
         
         if (error) throw error;
+        
+        // Get guest info for system message
+        const guest = appState.pendingGuests[guestIndex];
         
         // Remove from pending list in state
         appState.pendingGuests = appState.pendingGuests.filter((_, i) => i !== guestIndex);
@@ -1665,10 +1687,16 @@ async function approveGuest(guestIndex) {
             }
         }
         
-        showPendingGuests();
+        // Refresh the modal if open
+        if (pendingGuestsModal.style.display === 'flex') {
+            showPendingGuests();
+        }
         
         // Send system message
         await saveMessageToDB('System', `${guest.guest_name} has been approved and joined the chat.`);
+        
+        // Update active guests count
+        updateActiveGuestsCount();
         
     } catch (error) {
         console.error("Error approving guest:", error);
@@ -1677,9 +1705,8 @@ async function approveGuest(guestIndex) {
 }
 
 // Deny a guest
-async function denyGuest(guestIndex) {
-    const guest = appState.pendingGuests[guestIndex];
-    
+// Deny a guest
+async function denyGuest(guestId, guestIndex) {
     try {
         // Update guest status to rejected
         const { error } = await supabaseClient
@@ -1688,7 +1715,7 @@ async function denyGuest(guestIndex) {
                 status: 'rejected',
                 left_at: new Date().toISOString()
             })
-            .eq('id', guest.id);
+            .eq('id', guestId);
         
         if (error) throw error;
         
@@ -1703,7 +1730,10 @@ async function denyGuest(guestIndex) {
             }
         }
         
-        showPendingGuests();
+        // Refresh the modal if open
+        if (pendingGuestsModal.style.display === 'flex') {
+            showPendingGuests();
+        }
         
     } catch (error) {
         console.error("Error denying guest:", error);
@@ -2818,6 +2848,9 @@ window.downloadSession = downloadSession;
 window.deleteSession = deleteSession;
 window.editUserModalOpen = editUserModalOpen;
 window.confirmDeleteUser = confirmDeleteUser;
+window.showActiveGuestsModal = showActiveGuestsModal;
+window.kickGuest = kickGuest;
+window.showSessionGuests = showSessionGuests; // Add this if not already there
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', initApp);
