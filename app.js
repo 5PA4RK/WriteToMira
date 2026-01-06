@@ -170,11 +170,7 @@ async function authenticateUserFallback(username, password) {
         }
         
         // Since we can't easily verify bcrypt in JS, use RPC or fallback to test passwords
-        const { data: authResult } = await supabaseClient
-            .rpc('verify_password', {
-                stored_hash: user.password_hash,
-                password: password
-            });
+const authResult = (userData.password_hash === password);
         
         // If RPC works and password is verified
         if (authResult === true) {
