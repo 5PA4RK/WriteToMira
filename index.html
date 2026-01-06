@@ -1,26 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WriteToMira - Secure Communication</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- Connection Modal -->
-<!-- Replace the entire login form inside the connection modal -->
-<!-- Replace your connection modal with this -->
-<div id="connectionModal" class="connection-modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2><i class="fas fa-user-shield"></i> WriteToMira - Secure Connection</h2>
-        </div>
-        <div class="modal-body">
-            <div class="login-form">
-
-                <div class="form-group">
-                    <label for="usernameInput"><i class="fas fa-user"></i> Username:</label>
-                    <input type="text" id="usernameInput" class="form-input" placeholder="Enter Your Name">
-                </div>
-                
-                <div class="form-group">
-                    <label for="passwordInput"><i class="fas fa-lock"></i> Password:</label>
-                    <input type="password" id="passwordInput" class="form-input" placeholder="Enter password">
-                    <div class="password-hint" id="passwordHint">
-                        <!-- Password hints will go here -->
+    <!-- Connection Modal -->
     <div id="connectionModal" class="connection-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -31,7 +20,7 @@
                     <div class="form-group">
                         <label for="usernameInput"><i class="fas fa-user"></i> Username:</label>
                         <input type="text" id="usernameInput" class="form-input" placeholder="Enter username">
-</div>
+                    </div>
                     <div class="form-group">
                         <label for="passwordInput"><i class="fas fa-lock"></i> Password:</label>
                         <input type="password" id="passwordInput" class="form-input" placeholder="Enter password">
@@ -43,36 +32,28 @@
                     <button id="connectBtn" class="btn" style="width: 100%; margin-top: 20px;">
                         <i class="fas fa-plug"></i> Connect
                     </button>
-</div>
-                
-                <div id="passwordError" class="error-message" style="display: none;">
-                    Incorrect password for selected role.
                 </div>
-                
-                <button id="connectBtn" class="btn" style="width: 100%; margin-top: 20px;">
-                    <i class="fas fa-plug"></i> Connect
-                </button>
-</div>
-</div>
-</div>
-</div>
+            </div>
+        </div>
+    </div>
 
-<!-- Pending Guests Modal -->
-<div id="pendingGuestsModal" class="modal-overlay" style="display: none;">
-@@ -55,9 +47,7 @@ <h2><i class="fas fa-user-clock"></i> Pending Guests</h2>
-</button>
-</div>
-<div class="modal-body">
-                <div id="pendingGuestsList" class="pending-guests-list">
-                    <!-- Pending guests will be listed here -->
-                </div>
+    <!-- Pending Guests Modal -->
+    <div id="pendingGuestsModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-user-clock"></i> Pending Guests</h2>
+                <button id="closePendingModal" class="btn btn-secondary btn-small">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            </div>
+            <div class="modal-body">
                 <div id="pendingGuestsList" class="pending-guests-list"></div>
-<div id="noPendingGuests" style="text-align: center; padding: 20px; color: var(--text-secondary);">
-No pending guests at the moment.
-</div>
-@@ -72,6 +62,94 @@ <h2><i class="fas fa-user-clock"></i> Pending Guests</h2>
-</div>
-</div>
+                <div id="noPendingGuests" style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                    No pending guests at the moment.
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Add User Modal -->
     <div id="addUserModal" class="modal-overlay" style="display: none;">
@@ -162,200 +143,154 @@ No pending guests at the moment.
         </div>
     </div>
 
-<header>
-<div class="container">
-<div class="header-content">
-@@ -119,7 +197,6 @@ <h2 id="chatTitle"><i class="fas fa-comments"></i> Active Chat</h2>
-</div>
-</div>
-<div class="chat-messages" id="chatMessages">
-                    <!-- Messages will appear here -->
-<div class="message received">
-<div class="message-sender">System</div>
-<div class="message-content">
-@@ -142,9 +219,7 @@ <h2 id="chatTitle"><i class="fas fa-comments"></i> Active Chat</h2>
-<button id="emojiBtn" class="file-input-label">
-<i class="fas fa-smile"></i>
-</button>
-                            <div class="emoji-picker" id="emojiPicker">
-                                <!-- Emojis will be populated by JavaScript -->
-                            </div>
-                            <div class="emoji-picker" id="emojiPicker"></div>
-</div>
-</div>
-<button id="sendMessageBtn" class="btn" disabled>
-@@ -153,131 +228,56 @@ <h2 id="chatTitle"><i class="fas fa-comments"></i> Active Chat</h2>
-</div>
-</section>
-
-            <!-- History Section -->
-            <section class="history-section" id="historySection">
-                <div class="section-header">
-                    <h2><i class="fas fa-history"></i> Chat Sessions</h2>
-                    <button id="refreshHistoryBtn" class="btn btn-small">
-                        <i class="fas fa-sync-alt"></i>
-            <!-- Admin Panel Section -->
-            <section class="admin-section" id="adminSection">
-                <div class="admin-tabs">
-                    <button class="admin-tab active" id="historyTabBtn" data-tab="history">
-                        <i class="fas fa-history"></i> Old Sessions
-                    </button>
-                    <button class="admin-tab" id="usersTabBtn" data-tab="users">
-                        <i class="fas fa-users-cog"></i> Users
-</button>
-</div>
-                <div class="history-cards" id="historyCards">
-                    <!-- Session cards will be populated here -->
-                
-                <div class="admin-content">
-                    <!-- History Tab Content -->
-                    <div class="admin-tab-content active" id="historyTabContent">
-                        <div class="section-header">
-                            <h2><i class="fas fa-history"></i> Chat Sessions</h2>
-                            <button id="refreshHistoryBtn" class="btn btn-small">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
+    <!-- Main App Container -->
+    <div class="main-container">
+        <header>
+            <div class="container">
+                <div class="header-content">
+                    <div class="logo">
+                        <i class="fas fa-comment-dots"></i>
+                        <h1>WriteToMira</h1>
+                    </div>
+                    <div class="header-controls">
+                        <div class="user-status">
+                            <div id="statusIndicator" class="status-indicator offline"></div>
+                            <div id="userRoleDisplay">Disconnected</div>
                         </div>
-                        <div class="history-cards" id="historyCards">
-                            <!-- Session cards will be populated here -->
+                        <button id="logoutBtn" class="btn btn-danger" style="display: none;">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
+                        <button id="pendingGuestsBtn" class="btn btn-secondary" style="display: none;">
+                            <i class="fas fa-user-clock"></i> Pending <span id="pendingCount" class="badge">0</span>
+                        </button>
+                        <div id="soundControl" class="sound-control">
+                            <i class="fas fa-volume-up"></i>
+                            <span>Sound On</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-app">
+            <div class="container">
+                <section class="chat-section">
+                    <div class="section-header">
+                        <h2 id="chatTitle"><i class="fas fa-comments"></i> Active Chat</h2>
+                        <div id="chatModeIndicator" class="chat-mode-indicator" style="display: none;">
+                            <i class="fas fa-history"></i> Viewing Historical Chat
+                            <button id="returnToActiveBtn" class="btn btn-small">
+                                <i class="fas fa-arrow-left"></i> Return to Active
+                            </button>
                         </div>
                     </div>
                     
-                    <!-- Users Tab Content -->
-                    <div class="admin-tab-content" id="usersTabContent">
-                        <div class="section-header">
-                            <h2><i class="fas fa-users-cog"></i> User Management</h2>
-                            <button id="addUserBtn" class="btn btn-small btn-success">
-                                <i class="fas fa-user-plus"></i> Add User
-                            </button>
-                        </div>
-                        
-                        <div class="user-management-controls">
-                            <div class="search-box">
-                                <input type="text" id="userSearchInput" placeholder="Search users..." class="form-input">
-                                <i class="fas fa-search"></i>
+                    <div id="typingIndicator" class="typing-indicator">
+                        <i class="fas fa-pencil-alt"></i>
+                        <span id="typingUser">Someone</span> is typing...
+                    </div>
+                    
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message received">
+                            <div class="message-sender">System</div>
+                            <div class="message-content">
+                                <div class="message-text">Welcome to WriteToMira! Please connect to start chatting.</div>
+                                <div class="message-time">Just now</div>
                             </div>
                         </div>
+                    </div>
+                    
+                    <div class="chat-input-area">
+                        <div class="chat-input-wrapper">
+                            <textarea id="messageInput" class="message-input" placeholder="Please connect to start chatting" disabled></textarea>
+                            <div class="input-actions">
+                                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                                <label for="imageUpload" class="file-input-label">
+                                    <i class="fas fa-image"></i>
+                                </label>
+                                <button id="emojiBtn" class="file-input-label">
+                                    <i class="fas fa-smile"></i>
+                                </button>
+                                <div class="emoji-picker" id="emojiPicker"></div>
+                            </div>
+                        </div>
+                        <button id="sendMessageBtn" class="btn" disabled>
+                            <i class="fas fa-paper-plane"></i> Send
+                        </button>
+                    </div>
+                    
+                    <div class="chat-actions" style="padding: 15px 20px; border-top: 1px solid var(--border-color);">
+                        <button id="clearChatBtn" class="btn btn-secondary btn-small">
+                            <i class="fas fa-trash-alt"></i> Clear Chat
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Admin Panel Section -->
+                <section class="admin-section" id="adminSection" style="display: none;">
+                    <div class="admin-tabs">
+                        <button class="admin-tab active" id="historyTabBtn" data-tab="history">
+                            <i class="fas fa-history"></i> Old Sessions
+                        </button>
+                        <button class="admin-tab" id="usersTabBtn" data-tab="users">
+                            <i class="fas fa-users-cog"></i> Users
+                        </button>
+                    </div>
+                    
+                    <div class="admin-content">
+                        <!-- History Tab Content -->
+                        <div class="admin-tab-content active" id="historyTabContent">
+                            <div class="section-header">
+                                <h2><i class="fas fa-history"></i> Chat Sessions</h2>
+                                <button id="refreshHistoryBtn" class="btn btn-small">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                            <div class="history-cards" id="historyCards"></div>
+                        </div>
                         
-                        <div class="users-list" id="usersList">
-                            <!-- Users will be populated here -->
+                        <!-- Users Tab Content -->
+                        <div class="admin-tab-content" id="usersTabContent">
+                            <div class="section-header">
+                                <h2><i class="fas fa-users-cog"></i> User Management</h2>
+                                <button id="addUserBtn" class="btn btn-small btn-success">
+                                    <i class="fas fa-user-plus"></i> Add User
+                                </button>
+                            </div>
+                            
+                            <div class="user-management-controls">
+                                <div class="search-box">
+                                    <input type="text" id="userSearchInput" placeholder="Search users..." class="form-input">
+                                    <i class="fas fa-search"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="users-list" id="usersList"></div>
                         </div>
                     </div>
-</div>
-</section>
-</div>
-</div>
+                </section>
+            </div>
+        </main>
+    </div>
 
-    <!-- Add this after the history-cards div -->
-<div class="user-management-section" id="userManagementSection" style="display: none;">
-    <div class="section-header">
-        <h2><i class="fas fa-users-cog"></i> User Management</h2>
-        <button id="backToHistoryBtn" class="btn btn-small">
-            <i class="fas fa-arrow-left"></i> Back to History
-        </button>
-    </div>
-    
-    <div class="user-management-controls">
-        <button id="addUserBtn" class="btn btn-success">
-            <i class="fas fa-user-plus"></i> Add New User
-        </button>
-        <div class="search-box">
-            <input type="text" id="userSearchInput" placeholder="Search users..." class="form-input">
-            <i class="fas fa-search"></i>
+    <!-- Image Modal -->
+    <div id="imageModal" class="image-modal-overlay" style="display: none;">
+        <div class="image-modal-content">
+            <img id="fullSizeImage" src="" alt="Full size image">
         </div>
     </div>
-    
-    <div class="users-list" id="usersList">
-        <!-- Users will be populated here -->
-    </div>
-</div>
 
-<!-- Add User Modal -->
-<div id="addUserModal" class="modal-overlay" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2><i class="fas fa-user-plus"></i> Add New User</h2>
-            <button id="closeAddUserModal" class="btn btn-secondary btn-small">
-                <i class="fas fa-times"></i> Close
-            </button>
-        </div>
-        <div class="modal-body">
-            <div class="form-group">
-                <label for="newUsername"><i class="fas fa-user"></i> Username:</label>
-                <input type="text" id="newUsername" class="form-input" placeholder="Enter username">
-            </div>
-            <div class="form-group">
-                <label for="newDisplayName"><i class="fas fa-id-card"></i> Display Name:</label>
-                <input type="text" id="newDisplayName" class="form-input" placeholder="Enter display name">
-            </div>
-            <div class="form-group">
-                <label for="newPassword"><i class="fas fa-lock"></i> Password:</label>
-                <input type="password" id="newPassword" class="form-input" placeholder="Enter password">
-            </div>
-            <div class="form-group">
-                <label for="newRole"><i class="fas fa-user-tag"></i> Role:</label>
-                <select id="newRole" class="form-input">
-                    <option value="guest">Guest</option>
-                    <option value="host">Host</option>
-                </select>
-            </div>
-            <div id="addUserError" class="error-message" style="display: none;"></div>
-            <button id="saveUserBtn" class="btn" style="width: 100%; margin-top: 20px;">
-                <i class="fas fa-save"></i> Save User
-            </button>
-        </div>
-    </div>
-</div>
+    <!-- Audio element for message sounds -->
+    <audio id="messageSound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3" type="audio/mpeg">
+    </audio>
 
-<!-- Edit User Modal -->
-<div id="editUserModal" class="modal-overlay" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2><i class="fas fa-user-edit"></i> Edit User</h2>
-            <button id="closeEditUserModal" class="btn btn-secondary btn-small">
-                <i class="fas fa-times"></i> Close
-            </button>
+    <footer>
+        <div class="container">
+            <p>WriteToMira &copy; 2025 - Secure Communication Platform For Mira | End-to-End Encrypted</p>
         </div>
-        <div class="modal-body">
-            <input type="hidden" id="editUserId">
-            <div class="form-group">
-                <label for="editUsername"><i class="fas fa-user"></i> Username:</label>
-                <input type="text" id="editUsername" class="form-input" readonly>
-            </div>
-            <div class="form-group">
-                <label for="editDisplayName"><i class="fas fa-id-card"></i> Display Name:</label>
-                <input type="text" id="editDisplayName" class="form-input">
-            </div>
-            <div class="form-group">
-                <label for="editPassword"><i class="fas fa-lock"></i> New Password (leave blank to keep current):</label>
-                <input type="password" id="editPassword" class="form-input" placeholder="Enter new password">
-            </div>
-            <div class="form-group">
-                <label for="editRole"><i class="fas fa-user-tag"></i> Role:</label>
-                <select id="editRole" class="form-input">
-                    <option value="guest">Guest</option>
-                    <option value="host">Host</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="editIsActive" style="display: flex; align-items: center; gap: 10px;">
-                    <input type="checkbox" id="editIsActive" style="width: auto;">
-                    <span>Active Account</span>
-                </label>
-            </div>
-            <div id="editUserError" class="error-message" style="display: none;"></div>
-            <div class="modal-actions">
-                <button id="updateUserBtn" class="btn">
-                    <i class="fas fa-save"></i> Update User
-                </button>
-                <button id="deleteUserBtn" class="btn btn-danger">
-                    <i class="fas fa-trash"></i> Delete User
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+    </footer>
 
-<footer>
-<div class="container">
-<p>WriteToMira &copy; 2025 - Secure Communication Platform For Mira| End-to-End Encrypted</p>
+    <script src="app.js"></script>
+</body>
+</html>
