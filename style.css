@@ -1,3 +1,4 @@
+
 :root {
     /* Dark grey background colors */
     --dark-bg: #41414e;
@@ -1099,70 +1100,21 @@ input:focus, button:focus, textarea:focus {
     border-radius: 4px;
     margin-top: 4px;
 }
-/* Add these styles */
-.form-hint {
+/* Username input specific styles */
+#usernameInput {
+    text-transform: lowercase;
+}
+
+/* Password hint styling */
+.password-hint {
     font-size: 12px;
     color: var(--accent-light);
     margin-top: 4px;
+    font-style: italic;
     opacity: 0.8;
-}
-
-#guestNameGroup {
-    flex-direction: column;
-    gap: 8px;
-    animation: fadeIn 0.3s ease;
-}
-
-/* Active guests display */
-.active-guests-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: rgba(78, 205, 196, 0.1);
-    color: var(--success-green);
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    margin-left: 10px;
-    border: 1px solid var(--success-green);
-}
-
-/* Guest list in session card */
-.guest-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 5px;
-}
-
-.guest-tag {
+    padding: 4px 8px;
     background: rgba(138, 43, 226, 0.1);
-    color: var(--accent-light);
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    border: 1px solid var(--accent-secondary);
-}
-/* Guest name input animation */
-#guestNameGroup {
-    flex-direction: column;
-    gap: 8px;
-    max-height: 200px;
-    overflow: hidden;
-    transition: max-height 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
-}
-
-/* When hidden */
-#guestNameGroup[style*="display: none"] {
-    max-height: 0;
-    opacity: 0;
-    margin: 0;
-    padding: 0;
-    transform: translateY(-10px);
-}
-
-/* When shown */
-#guestNameGroup[style*="display: flex"] {
-    opacity: 1;
-    transform: translateY(0);
+    border-radius: 4px;
+    border-left: 2px solid var(--accent-primary);
+    display: none;
 }
