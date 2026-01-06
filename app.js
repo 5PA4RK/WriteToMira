@@ -24,10 +24,12 @@ const appState = {
     isViewingHistory: false,
     viewingSessionId: null,
     pendingGuests: [],
-    emojis: ["😀", "😂", "😍", "😎", "😭", "😡", "👍", "👎", "❤️", "🔥", "👏", "🙏", "🤔", "😴", "🥳"]
+    emojis: ["😀", "😂", "😍", "😎", "😭", "😡", "👍", "👎", "❤️", "🔥", "👏", "🙏", "🤔", "😴", "🥳"],
+    users: [],
+    isViewingUsers: false
 };
 
-// DOM Elements (same as original)
+// DOM Elements
 const connectionModal = document.getElementById('connectionModal');
 const connectBtn = document.getElementById('connectBtn');
 const passwordError = document.getElementById('passwordError');
@@ -66,7 +68,62 @@ const typingUser = document.getElementById('typingUser');
 const imageModal = document.getElementById('imageModal');
 const fullSizeImage = document.getElementById('fullSizeImage');
 
-// Modal control functions (same as original)
+// User Management DOM Elements
+const userManagementSection = document.getElementById('userManagementSection');
+const backToHistoryBtn = document.getElementById('backToHistoryBtn');
+const addUserBtn = document.getElementById('addUserBtn');
+const userSearchInput = document.getElementById('userSearchInput');
+const usersList = document.getElementById('usersList');
+const addUserModal = document.getElementById('addUserModal');
+const closeAddUserModal = document.getElementById('closeAddUserModal');
+const editUserModal = document.getElementById('editUserModal');
+const closeEditUserModal = document.getElementById('closeEditUserModal');
+const newUsername = document.getElementById('newUsername');
+const newDisplayName = document.getElementById('newDisplayName');
+const newPassword = document.getElementById('newPassword');
+const newRole = document.getElementById('newRole');
+const addUserError = document.getElementById('addUserError');
+const saveUserBtn = document.getElementById('saveUserBtn');
+const editUserId = document.getElementById('editUserId');
+const editUsername = document.getElementById('editUsername');
+const editDisplayName = document.getElementById('editDisplayName');
+const editPassword = document.getElementById('editPassword');
+const editRole = document.getElementById('editRole');
+const editIsActive = document.getElementById('editIsActive');
+const editUserError = document.getElementById('editUserError');
+const updateUserBtn = document.getElementById('updateUserBtn');
+const deleteUserBtn = document.getElementById('deleteUserBtn');
+
+const usernameInput = document.getElementById('usernameInput');
+const passwordInput = document.getElementById('passwordInput');
+
+// Modal control functions
+function showConnectionModal() {
+    connectionModal.style.display = 'flex';
+    connectionModal.classList.add('show');
+    document.body.classList.add('modal-open');
+    
+    const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
+    if (mainContainer) {
+        mainContainer.style.display = 'none';
+    }
+    
+    // Reset inputs
+    if (usernameInput) usernameInput.value = '';
+    if (passwordInput) passwordInput.value = '';
+    if (passwordError) passwordError.style.display = 'none';
+    
+    const passwordHint = document.getElementById('passwordHint');
+    if (passwordHint) passwordHint.style.display = 'none';
+    
+    if (connectBtn) {
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
+    }
+    
+    clearSensitiveData();
+}
+
 function hideConnectionModal() {
     connectionModal.style.display = 'none';
     connectionModal.classList.remove('show');
@@ -96,7 +153,23 @@ function clearSensitiveData() {
     }
 }
 
-// Update initApp to call setupEventListeners after DOM is ready
+// Update password hint based on username
+function updatePasswordHint(username) {
+    const passwordHint = document.getElementById('passwordHint');
+    if (!passwordHint) return;
+    
+    if (username === 'guest') {
+        passwordHint.textContent = "Hint: Use 'guest123' for testing";
+        passwordHint.style.display = 'block';
+    } else if (username === 'host') {
+        passwordHint.textContent = "Hint: Use 'host123' for testing";
+        passwordHint.style.display = 'block';
+    } else {
+        passwordHint.style.display = 'none';
+    }
+}
+
+// Initialize the app
 async function initApp() {
     const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
     if (mainContainer) {
@@ -133,30 +206,9 @@ async function initApp() {
 
     updateSoundControl();
     setupEventListeners();
+    setupUserManagementListeners();
     populateEmojis();
     loadChatSessions();
-}
-// Reset modal inputs when showing connection modal
-function showConnectionModal() {
-    connectionModal.style.display = 'flex';
-    connectionModal.classList.add('show');
-    document.body.classList.add('modal-open');
-    
-    const mainContainer = document.querySelector('.main-container') || document.querySelector('.app-container');
-    if (mainContainer) {
-        mainContainer.style.display = 'none';
-    }
-    
-    // Reset inputs
-    document.getElementById('usernameInput').value = '';
-    document.getElementById('passwordInput').value = '';
-    document.getElementById('passwordError').style.display = 'none';
-    document.getElementById('passwordHint').style.display = 'none';
-    
-    connectBtn.disabled = false;
-    connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect';
-    
-    clearSensitiveData();
 }
 
 // Set up all event listeners
@@ -176,7 +228,7 @@ function setupEventListeners() {
     }
     
     if (connectBtn) {
-        connectBtn.addEventListener('click', handleConnect); // Fixed: removed extra quote
+        connectBtn.addEventListener('click', handleConnect);
     }
     
     // Logout
@@ -262,12 +314,8 @@ function setupEventListeners() {
     }, { passive: false });
 }
 
-// Handle connection - SIMPLIFIED VERSION FOR TESTING
-// Handle connection - UPDATED FOR DIRECT USERNAME INPUT
+// Handle connection
 async function handleConnect() {
-    const usernameInput = document.getElementById('usernameInput');
-    const passwordInput = document.getElementById('passwordInput');
-    
     const username = usernameInput.value.trim().toLowerCase();
     const password = passwordInput.value;
     
@@ -824,11 +872,13 @@ async function handleLogout() {
         appState.isViewingHistory = false;
         appState.viewingSessionId = null;
         appState.pendingGuests = [];
+        appState.isViewingUsers = false;
+        appState.users = [];
         
         // Reset modal inputs
-        document.getElementById('userSelect').value = 'guest';
-        document.getElementById('passwordInput').value = '';
-        document.getElementById('passwordError').style.display = 'none';
+        if (usernameInput) usernameInput.value = '';
+        if (passwordInput) passwordInput.value = '';
+        if (passwordError) passwordError.style.display = 'none';
         
         // Show connection modal
         showConnectionModal();
@@ -1638,10 +1688,435 @@ async function saveMessageToDB(senderName, messageText) {
 }
 
 // Auto-resize textarea
-messageInput.addEventListener('input', function() {
-    this.style.height = 'auto';
-    this.style.height = (this.scrollHeight) + 'px';
-});
+if (messageInput) {
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+}
+
+// ============================================
+// USER MANAGEMENT FUNCTIONS
+// ============================================
+
+// Add event listeners for user management
+function setupUserManagementListeners() {
+    // User management navigation
+    const manageUsersBtn = document.createElement('button');
+    manageUsersBtn.className = 'btn btn-small';
+    manageUsersBtn.innerHTML = '<i class="fas fa-users-cog"></i> Manage Users';
+    manageUsersBtn.style.marginLeft = '10px';
+    
+    manageUsersBtn.addEventListener('click', () => {
+        if (appState.isHost) {
+            showUserManagement();
+        } else {
+            alert("Only hosts can manage users.");
+        }
+    });
+    
+    // Add button to history section header
+    const historyHeader = document.querySelector('.history-section .section-header');
+    if (historyHeader) {
+        historyHeader.appendChild(manageUsersBtn);
+    }
+    
+    // Back to history
+    if (backToHistoryBtn) {
+        backToHistoryBtn.addEventListener('click', showHistory);
+    }
+    
+    // Add user button
+    if (addUserBtn) {
+        addUserBtn.addEventListener('click', showAddUserModal);
+    }
+    
+    // Close modals
+    if (closeAddUserModal) {
+        closeAddUserModal.addEventListener('click', () => {
+            addUserModal.style.display = 'none';
+        });
+    }
+    
+    if (closeEditUserModal) {
+        closeEditUserModal.addEventListener('click', () => {
+            editUserModal.style.display = 'none';
+        });
+    }
+    
+    // Save new user
+    if (saveUserBtn) {
+        saveUserBtn.addEventListener('click', saveNewUser);
+    }
+    
+    // Update user
+    if (updateUserBtn) {
+        updateUserBtn.addEventListener('click', updateUser);
+    }
+    
+    // Delete user
+    if (deleteUserBtn) {
+        deleteUserBtn.addEventListener('click', deleteUser);
+    }
+    
+    // Search users
+    if (userSearchInput) {
+        userSearchInput.addEventListener('input', function() {
+            searchUsers(this.value.toLowerCase());
+        });
+    }
+}
+
+// Show user management section
+function showUserManagement() {
+    if (!appState.isHost) {
+        alert("Only hosts can manage users.");
+        return;
+    }
+    
+    appState.isViewingUsers = true;
+    historyCards.style.display = 'none';
+    userManagementSection.style.display = 'block';
+    
+    loadUsers();
+}
+
+// Show history section
+function showHistory() {
+    appState.isViewingUsers = false;
+    historyCards.style.display = 'block';
+    userManagementSection.style.display = 'none';
+    loadChatSessions();
+}
+
+// Show add user modal
+function showAddUserModal() {
+    if (!appState.isHost) return;
+    
+    // Clear form
+    if (newUsername) newUsername.value = '';
+    if (newDisplayName) newDisplayName.value = '';
+    if (newPassword) newPassword.value = '';
+    if (newRole) newRole.value = 'guest';
+    if (addUserError) addUserError.style.display = 'none';
+    
+    addUserModal.style.display = 'flex';
+}
+
+// Load all users
+async function loadUsers() {
+    if (!appState.isHost) return;
+    
+    try {
+        const { data: users, error } = await supabaseClient
+            .from('user_management')
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        appState.users = users || [];
+        renderUsers(users);
+        
+    } catch (error) {
+        console.error("Error loading users:", error);
+        if (usersList) {
+            usersList.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: var(--danger-red);">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <div>Error loading users: ${error.message}</div>
+                </div>
+            `;
+        }
+    }
+}
+
+// Render users list
+function renderUsers(users) {
+    if (!usersList) return;
+    
+    if (!users || users.length === 0) {
+        usersList.innerHTML = `
+            <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                <i class="fas fa-users-slash" style="font-size: 48px; margin-bottom: 15px;"></i>
+                <h3>No Users Found</h3>
+                <p>Click "Add New User" to create your first user.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    usersList.innerHTML = '';
+    
+    users.forEach(user => {
+        const userCard = document.createElement('div');
+        userCard.className = `user-card ${user.role} ${user.is_active ? '' : 'inactive'}`;
+        userCard.dataset.userId = user.id;
+        
+        const lastLogin = user.last_login 
+            ? new Date(user.last_login).toLocaleString() 
+            : 'Never';
+        
+        userCard.innerHTML = `
+            <div class="user-header">
+                <div class="user-name">
+                    <i class="fas fa-user"></i>
+                    <h3>${user.display_name}</h3>
+                </div>
+                <div class="user-badges">
+                    <span class="user-badge badge-${user.role}">${user.role}</span>
+                    ${!user.is_active ? '<span class="user-badge badge-inactive">Inactive</span>' : ''}
+                </div>
+            </div>
+            <div class="user-details">
+                <div class="user-detail">
+                    <span class="user-detail-label">Username:</span>
+                    <span class="user-detail-value">${user.username}</span>
+                </div>
+                <div class="user-detail">
+                    <span class="user-detail-label">Created:</span>
+                    <span class="user-detail-value">${new Date(user.created_at).toLocaleDateString()}</span>
+                </div>
+                <div class="user-detail">
+                    <span class="user-detail-label">Last Login:</span>
+                    <span class="user-detail-value">${lastLogin}</span>
+                </div>
+                <div class="user-detail">
+                    <span class="user-detail-label">Created By:</span>
+                    <span class="user-detail-value">${user.created_by || 'System'}</span>
+                </div>
+            </div>
+            <div class="user-actions">
+                <button class="btn btn-secondary btn-small" onclick="editUserModalOpen('${user.id}')">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
+                <button class="btn btn-danger btn-small" onclick="confirmDeleteUser('${user.id}', '${user.username}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        `;
+        
+        usersList.appendChild(userCard);
+    });
+}
+
+// Search users
+function searchUsers(searchTerm) {
+    if (!searchTerm) {
+        renderUsers(appState.users);
+        return;
+    }
+    
+    const filteredUsers = appState.users.filter(user => 
+        user.username.toLowerCase().includes(searchTerm) ||
+        user.display_name.toLowerCase().includes(searchTerm) ||
+        user.role.toLowerCase().includes(searchTerm)
+    );
+    
+    renderUsers(filteredUsers);
+}
+
+// Open edit user modal
+function editUserModalOpen(userId) {
+    const user = appState.users.find(u => u.id === userId);
+    if (!user) return;
+    
+    if (editUserId) editUserId.value = user.id;
+    if (editUsername) editUsername.value = user.username;
+    if (editDisplayName) editDisplayName.value = user.display_name;
+    if (editPassword) editPassword.value = '';
+    if (editRole) editRole.value = user.role;
+    if (editIsActive) editIsActive.checked = user.is_active;
+    if (editUserError) editUserError.style.display = 'none';
+    
+    editUserModal.style.display = 'flex';
+}
+
+// Confirm delete user
+function confirmDeleteUser(userId, username) {
+    if (confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+        deleteUser(userId);
+    }
+}
+
+// Save new user
+async function saveNewUser() {
+    if (!appState.isHost) return;
+    
+    const username = newUsername.value.trim();
+    const displayName = newDisplayName.value.trim();
+    const password = newPassword.value;
+    const role = newRole.value;
+    
+    // Validation
+    if (!username || !displayName || !password) {
+        if (addUserError) {
+            addUserError.textContent = "All fields are required.";
+            addUserError.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (username.length < 3) {
+        if (addUserError) {
+            addUserError.textContent = "Username must be at least 3 characters.";
+            addUserError.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (password.length < 6) {
+        if (addUserError) {
+            addUserError.textContent = "Password must be at least 6 characters.";
+            addUserError.style.display = 'block';
+        }
+        return;
+    }
+    
+    try {
+        // Check if username already exists
+        const { data: existingUser } = await supabaseClient
+            .from('user_management')
+            .select('id')
+            .eq('username', username)
+            .single();
+        
+        if (existingUser) {
+            if (addUserError) {
+                addUserError.textContent = "Username already exists.";
+                addUserError.style.display = 'block';
+            }
+            return;
+        }
+        
+        // Create new user
+        const { error } = await supabaseClient
+            .from('user_management')
+            .insert([{
+                username: username,
+                display_name: displayName,
+                password_hash: password, // This will be hashed by the database function
+                role: role,
+                created_by: appState.userName,
+                is_active: true
+            }]);
+        
+        if (error) throw error;
+        
+        // Close modal and refresh list
+        addUserModal.style.display = 'none';
+        await loadUsers();
+        
+        // Show success message
+        alert(`User "${username}" created successfully!`);
+        
+    } catch (error) {
+        console.error("Error creating user:", error);
+        if (addUserError) {
+            addUserError.textContent = `Error: ${error.message}`;
+            addUserError.style.display = 'block';
+        }
+    }
+}
+
+// Update user
+async function updateUser() {
+    if (!appState.isHost) return;
+    
+    const userId = editUserId.value;
+    const displayName = editDisplayName.value.trim();
+    const password = editPassword.value;
+    const role = editRole.value;
+    const isActive = editIsActive.checked;
+    
+    if (!userId) return;
+    
+    try {
+        const updateData = {
+            display_name: displayName,
+            role: role,
+            is_active: isActive,
+            updated_at: new Date().toISOString()
+        };
+        
+        // Only update password if provided
+        if (password) {
+            updateData.password_hash = password;
+        }
+        
+        const { error } = await supabaseClient
+            .from('user_management')
+            .update(updateData)
+            .eq('id', userId);
+        
+        if (error) throw error;
+        
+        // Close modal and refresh list
+        editUserModal.style.display = 'none';
+        await loadUsers();
+        
+        // Show success message
+        alert("User updated successfully!");
+        
+    } catch (error) {
+        console.error("Error updating user:", error);
+        if (editUserError) {
+            editUserError.textContent = `Error: ${error.message}`;
+            editUserError.style.display = 'block';
+        }
+    }
+}
+
+// Delete user
+async function deleteUser(userId = null) {
+    if (!appState.isHost) return;
+    
+    const targetUserId = userId || editUserId.value;
+    if (!targetUserId) return;
+    
+    try {
+        // Check if user is trying to delete themselves
+        const { data: currentUser } = await supabaseClient
+            .from('user_management')
+            .select('username')
+            .eq('username', appState.userName.toLowerCase())
+            .single();
+        
+        if (currentUser) {
+            const { data: targetUser } = await supabaseClient
+                .from('user_management')
+                .select('username')
+                .eq('id', targetUserId)
+                .single();
+            
+            if (targetUser && targetUser.username === currentUser.username) {
+                alert("You cannot delete your own account!");
+                return;
+            }
+        }
+        
+        // Delete the user
+        const { error } = await supabaseClient
+            .from('user_management')
+            .delete()
+            .eq('id', targetUserId);
+        
+        if (error) throw error;
+        
+        // Close modal if open
+        editUserModal.style.display = 'none';
+        
+        // Refresh list
+        await loadUsers();
+        
+        // Show success message
+        alert("User deleted successfully!");
+        
+    } catch (error) {
+        console.error("Error deleting user:", error);
+        alert("Error deleting user: " + error.message);
+    }
+}
 
 // Make functions available globally
 window.showFullImage = showFullImage;
@@ -1653,6 +2128,8 @@ window.denyGuest = denyGuest;
 window.viewSessionHistory = viewSessionHistory;
 window.downloadSession = downloadSession;
 window.deleteSession = deleteSession;
+window.editUserModalOpen = editUserModalOpen;
+window.confirmDeleteUser = confirmDeleteUser;
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', initApp);
