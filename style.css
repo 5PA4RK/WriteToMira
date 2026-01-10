@@ -1924,3 +1924,76 @@ input:focus, button:focus, textarea:focus {
     border: 2px solid var(--accent-primary);
     box-shadow: 0 25px 50px rgba(138, 43, 226, 0.5);
 }
+/* Reply message styling */
+.message.reply-message {
+    margin-left: 30px;
+    position: relative;
+}
+
+.message.reply-message::before {
+    content: '';
+    position: absolute;
+    left: -20px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent-light);
+    opacity: 0.5;
+}
+
+.message.has-reply {
+    position: relative;
+}
+
+.message.has-reply::after {
+    content: '';
+    position: absolute;
+    right: -15px;
+    bottom: -10px;
+    width: 15px;
+    height: 2px;
+    background: var(--accent-light);
+    opacity: 0.5;
+}
+
+/* Reply indicator in message */
+.reply-indicator-message {
+    background: rgba(138, 43, 226, 0.1);
+    border-left: 3px solid var(--accent-primary);
+    padding: 5px 10px;
+    margin-bottom: 8px;
+    border-radius: 0 5px 5px 0;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.reply-indicator-message:hover {
+    background: rgba(138, 43, 226, 0.2);
+}
+
+.reply-indicator-message .fa-reply {
+    margin-right: 5px;
+    color: var(--accent-primary);
+    font-size: 0.9em;
+}
+
+.reply-preview {
+    display: flex;
+    flex-direction: column;
+    margin-left: 5px;
+}
+
+.reply-sender {
+    font-weight: bold;
+    font-size: 0.85em;
+    color: var(--accent-primary);
+}
+
+.reply-text {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
