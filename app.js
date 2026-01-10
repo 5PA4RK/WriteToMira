@@ -345,40 +345,29 @@ class MessageActions {
 
     static async addEmojiToMessage(messageId, emoji) {
         try {
-            // Check if user already added this emoji
-            const { data: existingEmoji, error: checkError } = await supabaseClient
+            // First, remove any existing emoji from this user for this message
+            const { data: existingEmoji, error: deleteError } = await supabaseClient
                 .from('message_emojis')
-                .select('id')
+                .delete()
                 .eq('message_id', messageId)
-                .eq('user_id', appState.userId)
-                .eq('emoji', emoji)
-                .single();
+                .eq('user_id', appState.userId);
             
-            if (existingEmoji) {
-                // Remove the emoji if already added
-                const { error: deleteError } = await supabaseClient
-                    .from('message_emojis')
-                    .delete()
-                    .eq('id', existingEmoji.id);
-                
-                if (deleteError) throw deleteError;
-                console.log('🗑️ Removed emoji:', emoji);
-                return 'removed';
-            } else {
-                // Add the emoji
-                const { error: insertError } = await supabaseClient
-                    .from('message_emojis')
-                    .insert([{
-                        message_id: messageId,
-                        user_id: appState.userId.toString(),
-                        user_name: appState.userName,
-                        emoji: emoji
-                    }]);
-                
-                if (insertError) throw insertError;
-                console.log('✅ Added emoji:', emoji);
-                return 'added';
-            }
+            if (deleteError) throw deleteError;
+            
+            // Add the new emoji
+            const { error: insertError } = await supabaseClient
+                .from('message_emojis')
+                .insert([{
+                    message_id: messageId,
+                    user_id: appState.userId.toString(),
+                    user_name: appState.userName,
+                    emoji: emoji
+                }]);
+            
+            if (insertError) throw insertError;
+            
+            console.log('✅ Added emoji:', emoji);
+            return 'added';
             
         } catch (error) {
             console.error("Error toggling emoji:", error);
@@ -483,7 +472,16 @@ class MessageActions {
             }
         });
     }
-
+    static connectReplyVisual(messageId, parentMessageId) {
+        const parentElement = document.getElementById(`msg-${parentMessageId}`);
+        const replyElement = document.getElementById(`msg-${messageId}`);
+        
+        if (parentElement && replyElement) {
+            // Add connection line visually
+            parentElement.classList.add('has-reply');
+            replyElement.classList.add('is-reply');
+        }
+    }
     static scrollToMessage(messageId) {
         const messageElement = document.getElementById(`msg-${messageId}`);
         if (messageElement) {
@@ -590,7 +588,11 @@ class ChatManager {
             const { data, error } = await supabaseClient
                 .from('messages')
                 .insert([messageData])
-                .select()
+                .select(`
+                    *,
+                    reply_to:sender_id,
+                    reply_to_text:messages!fk_reply(message)
+                `)
                 .single();
             
             if (error) {
@@ -599,6 +601,24 @@ class ChatManager {
             }
             
             console.log('✅ Message saved to DB:', data.id);
+            
+            // Get reply parent data if exists
+            let replyToData = null;
+            if (replyToId) {
+                const { data: parentMsg } = await supabaseClient
+                    .from('messages')
+                    .select('sender_name, message')
+                    .eq('id', replyToId)
+                    .single();
+                
+                if (parentMsg) {
+                    replyToData = {
+                        id: replyToId,
+                        sender: parentMsg.sender_name,
+                        text: parentMsg.message
+                    };
+                }
+            }
             
             // Display the sent message immediately
             ChatManager.displayMessage({
@@ -609,7 +629,8 @@ class ChatManager {
                 time: Utils.formatTime(new Date()),
                 type: 'sent',
                 is_historical: false,
-                reply_to_id: replyToId
+                reply_to_id: replyToId,
+                reply_to: replyToData
             });
             
             return { success: true, data };
@@ -637,6 +658,12 @@ class ChatManager {
         }
         messageDiv.id = `msg-${message.id}`;
         
+        // Add thread indicator if this is a reply
+        if (message.reply_to_id) {
+            messageDiv.classList.add('reply-message');
+            messageDiv.setAttribute('data-reply-to', message.reply_to_id);
+        }
+        
         let messageContent = Utils.escapeHtml(message.text || '');
         if (message.image) {
             messageContent += `<img src="${message.image}" class="message-image" onclick="ImageManager.showFullImage('${message.image}')">`;
@@ -650,11 +677,16 @@ class ChatManager {
         
         // Add reply indicator if this is a reply
         let replyInfo = '';
-        if (message.reply_to_id) {
+        if (message.reply_to_id && message.reply_to) {
+            const replyText = message.reply_to.text || '';
+            const shortText = replyText.length > 50 ? replyText.substring(0, 50) + '...' : replyText;
             replyInfo = `
                 <div class="reply-indicator-message" onclick="MessageActions.scrollToMessage('${message.reply_to_id}')">
                     <i class="fas fa-reply"></i>
-                    <span>Replying to a message</span>
+                    <div class="reply-preview">
+                        <span class="reply-sender">${Utils.escapeHtml(message.reply_to.sender || '')}</span>
+                        <span class="reply-text">${Utils.escapeHtml(shortText)}</span>
+                    </div>
                 </div>
             `;
         }
@@ -710,6 +742,11 @@ class ChatManager {
         
         DOM.chatMessages.appendChild(messageDiv);
         DOM.chatMessages.scrollTop = DOM.chatMessages.scrollHeight;
+        
+        // Connect reply messages visually
+        if (message.reply_to_id) {
+            MessageActions.connectReplyVisual(message.id, message.reply_to_id);
+        }
     }
 
     static async loadChatHistory(sessionId = null) {
@@ -719,7 +756,18 @@ class ChatManager {
         try {
             const { data: messages, error } = await supabaseClient
                 .from('messages')
-                .select('*, emoji_reactions, reply_to_id, reply_count, edited_at, deleted_at, deleted_by, is_deleted')
+                .select(`
+                    *,
+                    emoji_reactions,
+                    reply_to_id,
+                    reply_to:sender_id,
+                    reply_to_text:messages!fk_reply(message),
+                    reply_count,
+                    edited_at,
+                    deleted_at,
+                    deleted_by,
+                    is_deleted
+                `)
                 .eq('session_id', targetSessionId)
                 .eq('is_deleted', false)
                 .order('created_at', { ascending: true });
@@ -748,9 +796,24 @@ class ChatManager {
                 DOM.chatMessages.appendChild(historyHeader);
             }
             
+            // First pass: create messages
+            const messageMap = new Map();
             messages.forEach(msg => {
+                // Find reply parent data
+                let replyToData = null;
+                if (msg.reply_to_id) {
+                    const parentMsg = messages.find(m => m.id === msg.reply_to_id);
+                    if (parentMsg) {
+                        replyToData = {
+                            id: parentMsg.id,
+                            sender: parentMsg.sender_name,
+                            text: parentMsg.message
+                        };
+                    }
+                }
+                
                 const messageType = msg.sender_id === appState.userId.toString() ? 'sent' : 'received';
-                ChatManager.displayMessage({
+                const messageObj = {
                     id: msg.id,
                     sender: msg.sender_name,
                     sender_id: msg.sender_id,
@@ -760,10 +823,21 @@ class ChatManager {
                     type: messageType,
                     is_historical: !!sessionId,
                     reply_to_id: msg.reply_to_id,
+                    reply_to: replyToData,
                     emoji_reactions: msg.emoji_reactions,
                     edited_at: msg.edited_at,
                     is_deleted: msg.is_deleted
-                });
+                };
+                
+                messageMap.set(msg.id, messageObj);
+                ChatManager.displayMessage(messageObj);
+            });
+            
+            // Second pass: connect replies visually
+            messages.forEach(msg => {
+                if (msg.reply_to_id) {
+                    MessageActions.connectReplyVisual(msg.id, msg.reply_to_id);
+                }
             });
             
             DOM.chatMessages.scrollTop = DOM.chatMessages.scrollHeight;
@@ -1715,9 +1789,9 @@ class RealtimeManager {
         const existingChannel = supabaseClient.channel('emoji_reactions');
         if (existingChannel) supabaseClient.removeChannel(existingChannel);
         
-        // Subscribe to message_emojis table
+        // Subscribe to message_emojis table for current session
         supabaseClient
-            .channel('emoji_reactions')
+            .channel('emoji_reactions_' + appState.currentSessionId)
             .on(
                 'postgres_changes',
                 {
@@ -1728,53 +1802,18 @@ class RealtimeManager {
                 async (payload) => {
                     console.log('🎭 Emoji reaction update:', payload.eventType, payload.new?.emoji);
                     
-                    // Get updated message with reactions
-                    if (payload.new?.message_id || payload.old?.message_id) {
-                        const messageId = payload.new?.message_id || payload.old?.message_id;
-                        
+                    // Check if this emoji is for a message in current session
+                    if (payload.new?.message_id) {
+                        // Get the message to check session_id
                         const { data: message } = await supabaseClient
                             .from('messages')
-                            .select('emoji_reactions')
-                            .eq('id', messageId)
+                            .select('session_id, emoji_reactions')
+                            .eq('id', payload.new.message_id)
                             .single();
                         
-                        if (message) {
-                            // Update the displayed emoji reactions
-                            const messageElement = document.getElementById(`msg-${messageId}`);
-                            if (messageElement) {
-                                const reactionsContainer = messageElement.querySelector('.emoji-reactions');
-                                if (reactionsContainer) {
-                                    if (message.emoji_reactions && Object.keys(message.emoji_reactions).length > 0) {
-                                        const reactions = Object.entries(message.emoji_reactions);
-                                        reactionsContainer.innerHTML = reactions
-                                            .map(([emoji, count]) => `
-                                                <span class="emoji-reaction" onclick="MessageActions.addEmojiToMessage('${messageId}', '${emoji}')">
-                                                    ${emoji} ${count}
-                                                </span>
-                                            `).join('');
-                                        reactionsContainer.style.display = 'flex';
-                                    } else {
-                                        reactionsContainer.innerHTML = '';
-                                        reactionsContainer.style.display = 'none';
-                                    }
-                                } else if (message.emoji_reactions && Object.keys(message.emoji_reactions).length > 0) {
-                                    // Create reactions container if it doesn't exist
-                                    const messageContent = messageElement.querySelector('.message-content');
-                                    if (messageContent) {
-                                        const reactions = Object.entries(message.emoji_reactions);
-                                        const emojiReactionsHTML = `
-                                            <div class="emoji-reactions">
-                                                ${reactions.map(([emoji, count]) => `
-                                                    <span class="emoji-reaction" onclick="MessageActions.addEmojiToMessage('${messageId}', '${emoji}')">
-                                                        ${emoji} ${count}
-                                                    </span>
-                                                `).join('')}
-                                            </div>
-                                        `;
-                                        messageContent.insertAdjacentHTML('beforeend', emojiReactionsHTML);
-                                    }
-                                }
-                            }
+                        if (message && message.session_id === appState.currentSessionId) {
+                            // Refresh the emoji reactions for this message
+                            await RealtimeManager.refreshMessageEmojis(payload.new.message_id);
                         }
                     }
                 }
@@ -1801,7 +1840,66 @@ class RealtimeManager {
             appState.pendingSubscription = null;
         }
     }
-
+    static async refreshMessageEmojis(messageId) {
+        try {
+            // Get updated emoji reactions for this message
+            const { data: emojis, error } = await supabaseClient
+                .from('message_emojis')
+                .select('emoji, user_id')
+                .eq('message_id', messageId);
+            
+            if (error) throw error;
+            
+            // Group emojis by type and count
+            const emojiCounts = {};
+            emojis.forEach(emoji => {
+                emojiCounts[emoji.emoji] = (emojiCounts[emoji.emoji] || 0) + 1;
+            });
+            
+            // Update the message element
+            const messageElement = document.getElementById(`msg-${messageId}`);
+            if (messageElement) {
+                const reactionsContainer = messageElement.querySelector('.emoji-reactions');
+                if (reactionsContainer) {
+                    if (Object.keys(emojiCounts).length > 0) {
+                        reactionsContainer.innerHTML = Object.entries(emojiCounts)
+                            .map(([emoji, count]) => `
+                                <span class="emoji-reaction" onclick="MessageActions.addEmojiToMessage('${messageId}', '${emoji}')">
+                                    ${emoji} ${count}
+                                </span>
+                            `).join('');
+                        reactionsContainer.style.display = 'flex';
+                    } else {
+                        reactionsContainer.innerHTML = '';
+                        reactionsContainer.style.display = 'none';
+                    }
+                } else if (Object.keys(emojiCounts).length > 0) {
+                    // Create reactions container if it doesn't exist
+                    const messageContent = messageElement.querySelector('.message-content');
+                    if (messageContent) {
+                        const emojiReactionsHTML = `
+                            <div class="emoji-reactions">
+                                ${Object.entries(emojiCounts).map(([emoji, count]) => `
+                                    <span class="emoji-reaction" onclick="MessageActions.addEmojiToMessage('${messageId}', '${emoji}')">
+                                        ${emoji} ${count}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        `;
+                        messageContent.insertAdjacentHTML('beforeend', emojiReactionsHTML);
+                    }
+                }
+                
+                // Update app state
+                const messageIndex = appState.messages.findIndex(m => m.id === messageId);
+                if (messageIndex !== -1) {
+                    appState.messages[messageIndex].emoji_reactions = emojiCounts;
+                }
+            }
+        } catch (error) {
+            console.error("Error refreshing emoji reactions:", error);
+        }
+    }
     static checkAndReconnectSubscriptions() {
         if (!appState.isConnected || !appState.currentSessionId) return;
         
