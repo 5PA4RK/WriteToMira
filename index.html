@@ -22,7 +22,7 @@
 
                 <div class="form-group">
                     <label for="usernameInput"><i class="fas fa-user"></i> Username:</label>
-                    <input type="text" id="usernameInput" class="form-input" placeholder="Enter Your Name 4">
+                    <input type="text" id="usernameInput" class="form-input" placeholder="Enter Name">
                 </div>
                 
                 <div class="form-group">
@@ -68,6 +68,9 @@
     <!-- Image Modal -->
     <div id="imageModal" class="image-modal-overlay" style="display: none;">
         <div class="image-modal-content">
+            <button class="close-image-modal" onclick="document.getElementById('imageModal').style.display='none'">
+                <i class="fas fa-times"></i>
+            </button>
             <img id="fullSizeImage" src="" alt="Full size image">
         </div>
     </div>
@@ -227,11 +230,6 @@
     <div class="user-management-controls">
         <button id="addUserBtn" class="btn btn-success">
             <i class="fas fa-user-plus"></i> Add New User
-        </button>
-        <div class="search-box">
-            <input type="text" id="userSearchInput" placeholder="Search users..." class="form-input">
-            <i class="fas fa-search"></i>
-        </div>
     </div>
     
     <div class="users-list" id="usersList">
