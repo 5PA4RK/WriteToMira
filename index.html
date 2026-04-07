@@ -3,173 +3,281 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WriteToMira - Secure Chat</title>
+    <title>WriteToMira - Room Chat</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Connection Modal -->
-<!-- Replace the entire login form inside the connection modal -->
-<!-- Replace your connection modal with this -->
+
+<!-- Connection Modal -->
 <div id="connectionModal" class="connection-modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2><i class="fas fa-user-shield"></i> WriteToMira - Secure Connection</h2>
+            <h2><i class="fas fa-door-open"></i> WriteToMira Or Connect to Chat</h2>
         </div>
         <div class="modal-body">
-            <div class="login-form">
-
-                <div class="form-group">
-                    <label for="usernameInput"><i class="fas fa-user"></i> Username:</label>
-                    <input type="text" id="usernameInput" class="form-input" placeholder="Enter Name">
-                </div>
-                
-                <div class="form-group">
-                    <label for="passwordInput"><i class="fas fa-lock"></i> Password:</label>
-                    <input type="password" id="passwordInput" class="form-input" placeholder="Enter password">
-                    <div class="password-hint" id="passwordHint">
-                        <!-- Password hints will go here -->
-                    </div>
-                </div>
-                
-                <div id="passwordError" class="error-message" style="display: none;">
-                    Incorrect password for selected role.
-                </div>
-                
-                <button id="connectBtn" class="btn" style="width: 100%; margin-top: 20px;">
-                    <i class="fas fa-plug"></i> Connect
+            <!-- Guest Notification Section - No Login Required -->
+            <div class="guest-notification-section" style="margin-bottom: 25px; padding: 15px; background: rgba(255, 193, 7, 0.1); border-radius: 12px; border: 1px solid #ffc107;">
+                <h3 style="color: #ffc107; margin-bottom: 10px;">
+                    <i class="fas fa-bell"></i> Write to Mira
+                </h3>
+                <p style="color: var(--text-secondary); margin-bottom: 15px; font-size: 14px;">
+                    You can leave a message to Mira (No Login Required)
+                </p>
+                <button id="guestNotifyBtn" class="btn btn-warning" style="width: 100%;">
+                    <i class="fas fa-paper-plane"></i> Leave a Message to Mira
                 </button>
+            </div>
+
+            <hr style="border-color: var(--border-light); margin: 20px 0;">
+
+            <!-- Connection Form -->
+            <div class="connection-form">
+                <h3><i class="fas fa-sign-in-alt"></i> Login to Chat</h3>
+                
+                <!-- Username Field -->
+                <div class="form-group">
+                    <label for="usernameInput">
+                        <i class="fas fa-user"></i> Username:
+                    </label>
+                    <input type="text" id="usernameInput" class="form-input" 
+                           placeholder="Enter your username" autocomplete="off">
+                </div>
+                
+                <!-- Password Field -->
+                <div class="form-group">
+                    <label for="passwordInput">
+                        <i class="fas fa-lock"></i> Password:
+                    </label>
+                    <input type="password" id="passwordInput" class="form-input" 
+                           placeholder="Enter your password">
+                    <div class="password-hint" id="passwordHint"></div>
+                </div>
+        
+                
+                <!-- Error Message Area -->
+                <div id="passwordError" class="error-message" style="display: none;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span></span>
+                </div>
+                
+                <!-- CONNECT BUTTON -->
+                <button id="connectBtn" class="btn btn-primary btn-large connect-button" style="width: 100%;">
+                    <i class="fas fa-plug"></i>
+                    <span>Connect & Join Chat</span>
+                </button>
+                
+                <!-- Connection Help Text -->
+                <div class="connection-help">
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-    <!-- Pending Guests Modal -->
-    <div id="pendingGuestsModal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-user-clock"></i> Pending Guests</h2>
-                <button id="closePendingModal" class="btn btn-secondary btn-small">
-                    <i class="fas fa-times"></i> Close
-                </button>
+<!-- Guest Notification Modal (No Login Required) -->
+<div id="guestNotificationModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h2><i class="fas fa-bell"></i> Leave Message to Mira</h2>
+            <button id="closeGuestNotifyModal" class="btn btn-secondary btn-small">
+                <i class="fas fa-times"></i> Close
+            </button>
+        </div>
+        <div class="modal-body">
+            
+            <div class="form-group">
+                <label for="guestNotifyName"><i class="fas fa-user"></i> Your Name:</label>
+                <input type="text" id="guestNotifyName" class="form-input" placeholder="Enter your name">
             </div>
-            <div class="modal-body">
-                <div id="pendingGuestsList" class="pending-guests-list">
-                    <!-- Pending guests will be listed here -->
-                </div>
-                <div id="noPendingGuests" style="text-align: center; padding: 20px; color: var(--text-secondary);">
-                    No pending guests at the moment.
-                </div>
+            
+            <div class="form-group">
+                <label for="guestNotifyEmail">
+                    <i class="fas fa-envelope"></i> Your Email <span style="color: var(--text-secondary); font-weight: normal;">(optional)</span>:
+                </label>
+                <input type="email" id="guestNotifyEmail" class="form-input" placeholder="Enter your email (optional)">
+            </div>
+            
+            <div class="form-group">
+                <label for="guestNotifyMessage"><i class="fas fa-comment"></i> Message:</label>
+                <textarea id="guestNotifyMessage" class="form-input" rows="5" placeholder="Write your message to Mira here..."></textarea>
+            </div>
+            
+            <div id="guestNotifyError" class="error-message" style="display: none;"></div>
+            <div id="guestNotifySuccess" class="success-message" style="display: none; color: var(--success-green); padding: 10px; background: rgba(78, 205, 196, 0.1); border-radius: 8px; margin-top: 10px;"></div>
+            
+            <button id="sendGuestNotification" class="btn btn-warning" style="width: 100%; margin-top: 20px;">
+                <i class="fas fa-paper-plane"></i> Send Message
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Pending Guests Modal -->
+<div id="pendingGuestsModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-user-clock"></i> Pending Room Requests</h2>
+            <button id="closePendingModal" class="btn btn-secondary btn-small">
+                <i class="fas fa-times"></i> Close
+            </button>
+        </div>
+        <div class="modal-body">
+            <div id="pendingGuestsList" class="pending-guests-list"></div>
+            <div id="noPendingGuests" style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                No pending requests at the moment.
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Image Modal -->
-    <div id="imageModal" class="image-modal-overlay" style="display: none;">
-        <div class="image-modal-content">
-            <button class="close-image-modal" onclick="document.getElementById('imageModal').style.display='none'">
+<!-- Notes Panel (Host Only) -->
+<div id="notesPanel" class="notes-panel">
+    <div class="notes-panel-header">
+        <h2><i class="fas fa-sticky-note"></i> Visitor Notes</h2>
+        <div class="notes-header-actions">
+            <button id="markAllReadBtn" class="btn btn-small btn-success" title="Mark all as read">
+                <i class="fas fa-check-double"></i>
+            </button>
+            <button id="refreshNotesBtn" class="btn btn-small btn-secondary" title="Refresh">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            <button id="closeNotesPanel" class="btn btn-small btn-danger" title="Close">
                 <i class="fas fa-times"></i>
             </button>
-            <img id="fullSizeImage" src="" alt="Full size image">
         </div>
     </div>
+    
+    <div class="notes-panel-search">
+        <input type="text" id="notesSearchInput" placeholder="Search notes..." class="form-input">
+        <i class="fas fa-search"></i>
+    </div>
+    
+    <div class="notes-list" id="notesList">
+        <div class="loading-notes">
+            <div class="loading-spinner"></div>
+            <p>Loading notes...</p>
+        </div>
+    </div>
+</div>
 
-    <header>
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">
-                    <i class="fas fa-comment-alt"></i>
-                    <h1>WriteToMira</h1>
-                </div>
-                <div class="header-controls">
-                    <div class="sound-control" id="soundControl">
-                        <i class="fas fa-volume-up"></i>
-                        <span>Sound On</span>
-                    </div>
-                    <div class="user-status">
-                        <div id="statusIndicator" class="status-indicator offline"></div>
-                        <span id="userRoleDisplay">Disconnected</span>
-                    </div>
-                    
-                    <!-- PENDING GUESTS BUTTON (for hosts only) -->
-                    <button id="pendingGuestsBtn" class="btn btn-secondary" style="display: none;">
-                        <i class="fas fa-user-clock"></i> 
-                        <span id="pendingCount">0</span> Pending
+<!-- Image Modal -->
+<div id="imageModal" class="image-modal-overlay" style="display: none;">
+    <div class="image-modal-content">
+        <button class="close-image-modal" onclick="document.getElementById('imageModal').style.display='none'">
+            <i class="fas fa-times"></i>
+        </button>
+        <img id="fullSizeImage" src="" alt="Full size image">
+    </div>
+</div>
+
+<header>
+    <div class="container">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-door-open"></i>
+                <h1>WriteToMira</h1>
+            </div>
+            <div class="header-controls">
+
+                <!-- Theme Toggle -->
+                <div class="theme-toggle">
+                    <button class="theme-toggle-btn active" id="lightModeBtn" onclick="setTheme('light')">
+                        <i class="fas fa-sun"></i> Light
                     </button>
-                    
-                    <!-- LOGOUT BUTTON -->
-                    <button id="logoutBtn" class="btn btn-secondary" style="display: none;">
-                        <i class="fas fa-sign-out-alt"></i> Logout
+                    <button class="theme-toggle-btn" id="darkModeBtn" onclick="setTheme('dark')">
+                        <i class="fas fa-moon"></i> Dark
+                    </button>
+                </div>
+                
+                <div class="sound-control" id="soundControl">
+                    <i class="fas fa-volume-up"></i>
+                    <span>Sound On</span>
+                </div>
+
+                <div class="user-status">
+                    <div id="statusIndicator" class="status-indicator offline"></div>
+                    <span id="userRoleDisplay">Disconnected</span>
+                </div>
+                
+                <!-- Notes Button (Host Only) -->
+                <button id="notesBtn" class="btn btn-secondary" style="display: none; position: relative;">
+                    <i class="fas fa-sticky-note"></i>
+                    <span id="notesCount" class="notes-count-badge">0</span>
+                    Notes
+                </button>
+                
+                <button id="pendingGuestsBtn" class="btn btn-secondary" style="display: none;">
+                    <i class="fas fa-user-clock"></i> 
+                    <span id="pendingCount">0</span> Pending
+                </button>
+                
+                <button id="logoutBtn" class="btn btn-secondary" style="display: none;">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+                                    <!-- Add Clear Chat button here -->
+                <button id="clearChatBtn" class="btn btn-danger btn-small">
+                  <i class="fas fa-trash-alt"></i> Clear Chat
+                </button>
+            </div>
+        </div>
+    </div>
+</header>
+
+<div class="container">
+    <div class="main-app">
+        <!-- Chat Section -->
+        <section class="chat-section">
+            <div class="section-header">
+                <h2 id="chatTitle"><i class="fas fa-comments"></i> Active Chat</h2>
+                <div class="chat-mode-indicator" id="chatModeIndicator" style="display: none;">
+                    <i class="fas fa-history"></i>
+                    <span>Viewing Room History</span>
+                    <button id="returnToActiveBtn" class="btn btn-small btn-success">
+                        <i class="fas fa-arrow-left"></i> Return to Active
                     </button>
                 </div>
             </div>
-        </div>
-    </header>
-
-    <div class="container">
-        <div class="main-app">
-            <!-- Chat Section -->
-            <section class="chat-section">
-                <div class="section-header">
-                    <h2 id="chatTitle"><i class="fas fa-comments"></i> Active Chat</h2>
-                    <div class="chat-mode-indicator" id="chatModeIndicator" style="display: none;">
-                        <i class="fas fa-history"></i>
-                        <span>Viewing Historical Chat</span>
-                        <button id="returnToActiveBtn" class="btn btn-small btn-success">
-                            <i class="fas fa-arrow-left"></i> Return to Active
+            <div class="chat-messages" id="chatMessages">
+                <div class="message received">
+                    <div class="message-sender">System</div>
+                    <div class="message-content">
+                        <div class="message-text">Welcome to WriteToMira! Select a room and connect to start chatting.</div>
+                        <div class="message-time">Just now</div>
+                    </div>
+                </div>
+            </div>
+            <div id="typingIndicator" class="typing-indicator">
+                <i class="fas fa-pencil-alt"></i> <span id="typingUser">User</span> is typing...
+            </div>
+            <div class="chat-input-area">
+                <div class="chat-input-wrapper">
+                    <textarea id="messageInput" class="message-input" placeholder="Type your message here..." disabled></textarea>
+                    <div class="input-actions">
+                        <label for="imageUpload" class="file-input-label">
+                            <i class="fas fa-image"></i>
+                            <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                        </label>
+                        <button id="emojiBtn" class="file-input-label">
+                            <i class="fas fa-smile"></i>
                         </button>
-                    </div>
-                    <div class="chat-actions">
-                        <button id="clearChatBtn" class="btn btn-danger btn-small">
-                            <i class="fas fa-trash-alt"></i> Clear
-                        </button>
+                        <div class="emoji-picker" id="emojiPicker" style="display: none;"></div>
                     </div>
                 </div>
-                <div class="chat-messages" id="chatMessages">
-                    <!-- Messages will appear here -->
-                    <div class="message received">
-                        <div class="message-sender">System</div>
-                        <div class="message-content">
-                            <div class="message-text">Welcome to WriteToMira! Connect to start chatting.</div>
-                            <div class="message-time">Just now</div>
-                        </div>
-                    </div>
-                </div>
-                <div id="typingIndicator" class="typing-indicator">
-                    <i class="fas fa-pencil-alt"></i> <span id="typingUser">User</span> is typing...
-                </div>
-                <div class="chat-input-area">
-                    <div class="chat-input-wrapper">
-                        <textarea id="messageInput" class="message-input" placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)" disabled></textarea>
-                        <div class="input-actions">
-                            <label for="imageUpload" class="file-input-label">
-                                <i class="fas fa-image"></i>
-                                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
-                            </label>
-                            <button id="emojiBtn" class="file-input-label">
-                                <i class="fas fa-smile"></i>
-                            </button>
-                            <div class="emoji-picker" id="emojiPicker">
-                                <!-- Emojis will be populated by JavaScript -->
-                            </div>
-                        </div>
-                    </div>
-                    <button id="sendMessageBtn" class="btn" disabled>
-                        <i class="fas fa-paper-plane"></i> Send
-                    </button>
-                </div>
-            </section>
-
-
-        </div>
+                <button id="sendMessageBtn" class="btn" disabled>
+                    <i class="fas fa-paper-plane"></i> Send
+                </button>
+            </div>
+        </section>
     </div>
+</div>
 
-<!-- Add this right after the chat-section -->
+<!-- Admin Panel (Host Only) -->
 <div class="admin-panel" id="adminSection" style="display: none;">
     <div class="admin-tabs">
         <button id="historyTabBtn" class="admin-tab active">
-            <i class="fas fa-history"></i> Chat Sessions
+            <i class="fas fa-door-open"></i> Rooms
         </button>
         <button id="usersTabBtn" class="admin-tab">
             <i class="fas fa-users-cog"></i> User Management
@@ -178,22 +286,18 @@
     
     <div class="admin-tab-content">
         <div id="historyTabContent" class="tab-pane active">
-            <!-- This will contain the history cards -->
             <div class="history-section">
                 <div class="section-header">
-                    <h2><i class="fas fa-history"></i> Chat Sessions</h2>
+                    <h2><i class="fas fa-door-open"></i> Rooms & History</h2>
                     <button id="refreshHistoryBtn" class="btn btn-small">
                         <i class="fas fa-sync-alt"></i>
                     </button>
                 </div>
-                <div class="history-cards" id="historyCards">
-                    <!-- Session cards will be populated here -->
-                </div>
+                <div class="history-cards" id="historyCards"></div>
             </div>
         </div>
         
         <div id="usersTabContent" class="tab-pane">
-            <!-- This will contain the user management -->
             <div class="user-management-section">
                 <div class="section-header">
                     <h2><i class="fas fa-users-cog"></i> User Management</h2>
@@ -209,31 +313,9 @@
                     </div>
                 </div>
                 
-                <div class="users-list" id="usersList">
-                    <!-- Users will be populated here -->
-                </div>
+                <div class="users-list" id="usersList"></div>
             </div>
         </div>
-    </div>
-</div>
-
-
-    <!-- Add this after the history-cards div -->
-<div class="user-management-section" id="userManagementSection" style="display: none;">
-    <div class="section-header">
-        <h2><i class="fas fa-users-cog"></i> User Management</h2>
-        <button id="backToHistoryBtn" class="btn btn-small">
-            <i class="fas fa-arrow-left"></i> Back to History
-        </button>
-    </div>
-    
-    <div class="user-management-controls">
-        <button id="addUserBtn" class="btn btn-success">
-            <i class="fas fa-user-plus"></i> Add New User
-    </div>
-    
-    <div class="users-list" id="usersList">
-        <!-- Users will be populated here -->
     </div>
 </div>
 
@@ -311,29 +393,96 @@
                 </label>
             </div>
             <div id="editUserError" class="error-message" style="display: none;"></div>
-            <div class="modal-actions">
-                <button id="updateUserBtn" class="btn">
-                    <i class="fas fa-save"></i> Update User
+            <div class="modal-actions" style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="updateUserBtn" class="btn" style="flex: 1;">
+                    <i class="fas fa-save"></i> Update
                 </button>
-                <button id="deleteUserBtn" class="btn btn-danger">
-                    <i class="fas fa-trash"></i> Delete User
+                <button id="deleteUserBtn" class="btn btn-danger" style="flex: 1;">
+                    <i class="fas fa-trash"></i> Delete
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-    <footer>
-        <div class="container">
-            <p>WriteToMira &copy; 2025 - Secure Communication Platform For Mira| End-to-End Encrypted</p>
+
+
+<footer>
+    <div class="container" align="center">
+        <p>WriteToMira &copy; 2026</p>
+        <p>Secure Communication Platform</p>
+    </div>
+</footer>
+
+
+<script src="app.js"></script>
+<script src="chat.js"></script>
+
+<script>
+    // Theme switching - added directly to HTML to ensure it loads
+    (function() {
+        function setTheme(theme) {
+            const body = document.body;
+            const lightBtn = document.getElementById('lightModeBtn');
+            const darkBtn = document.getElementById('darkModeBtn');
+            
+            if (theme === 'dark') {
+                body.classList.add('dark-mode');
+                if (lightBtn) lightBtn.classList.remove('active');
+                if (darkBtn) darkBtn.classList.add('active');
+                localStorage.setItem('writeToMe_theme', 'dark');
+            } else {
+                body.classList.remove('dark-mode');
+                if (lightBtn) lightBtn.classList.add('active');
+                if (darkBtn) darkBtn.classList.remove('active');
+                localStorage.setItem('writeToMe_theme', 'light');
+            }
+        }
+        
+        // Load saved theme - DEFAULT TO DARK if no saved preference
+        const savedTheme = localStorage.getItem('writeToMe_theme');
+        if (savedTheme === 'light') {
+            setTheme('light');
+        } else {
+            // Default to dark mode
+            setTheme('dark');
+        }
+        
+        // Make setTheme globally available
+        window.setTheme = setTheme;
+    })();
+    </script>
+
+
+
+<!-- Reply Modal - MUST BE THE LAST ELEMENT BEFORE </body> -->
+<div id="replyModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h2><i class="fas fa-reply"></i> Reply to Message</h2>
+            <button id="closeReplyModal" class="btn btn-secondary btn-small">
+                <i class="fas fa-times"></i> Close
+            </button>
         </div>
-    </footer>
-
-    <!-- Audio for message notification -->
-    <audio id="messageSound" preload="auto">
-        <source src="https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3" type="audio/mpeg">
-    </audio>
-
-    <script src="app.js"></script>
+        <div class="modal-body">
+            <div style="background: var(--bg-tertiary); padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 3px solid var(--primary); max-height: 150px; overflow-y: auto;">
+                <strong style="display: block; margin-bottom: 5px;">Replying to <span id="replyToName">User</span>:</strong>
+                <p id="replyToContent" style="margin: 0; font-style: italic; color: var(--text-secondary); word-break: break-word;"></p>
+            </div>
+            <div class="form-group">
+                <label for="replyInput"><i class="fas fa-comment"></i> Your Reply:</label>
+                <textarea id="replyInput" class="form-input" rows="4" placeholder="Type your reply here..." style="resize: vertical;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="sendReplyBtn" class="btn btn-primary" style="flex: 2;">
+                    <i class="fas fa-paper-plane"></i> Send Reply
+                </button>
+                <button id="closeReplyModalBtn" class="btn btn-secondary" style="flex: 1;" onclick="document.getElementById('replyModal').style.display='none'; if(window.appState) window.appState.replyingTo = null; document.body.classList.remove('modal-open');">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 </body>
 </html>
