@@ -301,14 +301,13 @@ const ChatModule = (function() {
     };
 
     const openReplyModal = (messageId, senderName, messageText) => {
-        console.log('openReplyModal called:', { messageId, senderName, messageText });
+        console.log('📝 Opening reply modal for:', messageId);
         
         if (!elements.replyModal) {
             console.error('Reply modal element not found');
             return;
         }
         
-        // Ensure modal is in body
         if (elements.replyModal.parentElement !== document.body) {
             document.body.appendChild(elements.replyModal);
         }
@@ -321,87 +320,71 @@ const ChatModule = (function() {
             emojiPicker.classList.remove('show');
         }
         
-        // Get image from the message if available
+        const messageElement = document.getElementById(`msg-${messageId}`);
         let imageUrl = null;
         let actualText = messageText;
-        const messageElement = document.getElementById(`msg-${messageId}`);
         
         if (messageElement) {
             const imgEl = messageElement.querySelector('.message-image');
             if (imgEl?.src) imageUrl = imgEl.src;
-            
             const textEl = messageElement.querySelector('.message-text');
             if (textEl) {
-                const rawText = textEl.textContent.replace(/\s*\(edited\)\s*$/, '');
-                if (rawText && rawText !== '[Image]') {
-                    actualText = rawText;
-                } else {
-                    actualText = '';
-                }
+                const raw = textEl.textContent.replace(/\s*\(edited\)\s*$/, '');
+                if (raw && raw !== '[Image]') actualText = raw;
+                else actualText = '';
             }
         }
         
-        // Try appState if not found in DOM
         if (!imageUrl && appState?.messages) {
             const originalMsg = appState.messages.find(m => m.id === messageId);
-            if (originalMsg) {
-                imageUrl = originalMsg._realImageUrl || originalMsg.image;
-                if (!actualText && originalMsg.text) actualText = originalMsg.text;
-            }
+            if (originalMsg) imageUrl = originalMsg._realImageUrl || originalMsg.image;
         }
         
-        // Store reply data globally for sendMessage to access
-        window.__tempReplyTo = messageId;
-        window.__tempReplyToImage = imageUrl;
+        // Store reply data
+        window.__replyData = { 
+            messageId: messageId, 
+            senderName: senderName, 
+            messageText: actualText, 
+            imageUrl: imageUrl 
+        };
         
-        if (appState) {
-            appState.replyingTo = messageId;
-            appState.replyingToImage = imageUrl;
+        if (appState) { 
+            appState.replyingTo = messageId; 
+            appState.replyingToImage = imageUrl; 
         }
         
-        // Update modal UI
+        console.log('Stored reply data:', window.__replyData);
+        
         if (elements.replyToName) {
             elements.replyToName.textContent = senderName || 'Unknown';
         }
         
-        // Build quoted content display
-        let displayContent = '';
-        if (actualText && actualText.trim()) {
-            displayContent = escapeHtml(actualText);
-            if (displayContent.length > 150) displayContent = displayContent.substring(0, 150) + '...';
+        let displayText = actualText || '';
+        if (imageUrl) {
+            displayText = `<div style="margin-top:10px;display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.05);padding:8px;border-radius:8px;">
+                <img src="${imageUrl}" style="max-width:60px;max-height:60px;border-radius:8px;object-fit:cover;">
+                <span><i class="fas fa-image"></i> Image attached</span>
+            </div>${displayText ? displayText : ''}`;
         }
         
-        if (imageUrl) {
-            const imageHtml = `<div style="margin-top:10px;"><img src="${imageUrl}" style="max-width:100px; max-height:100px; border-radius:8px;"></div>`;
-            if (displayContent) {
-                displayContent += imageHtml;
-            } else {
-                displayContent = `<div><i class="fas fa-image"></i> Image</div>${imageHtml}`;
-            }
+        if (displayText.length > 150) {
+            displayText = displayText.substring(0, 150) + '...';
         }
         
         if (elements.replyToContent) {
-            elements.replyToContent.innerHTML = displayContent || '<em>No content</em>';
+            elements.replyToContent.innerHTML = displayText;
         }
         
         if (elements.replyInput) {
             elements.replyInput.value = '';
         }
         
-        // Show modal
+        // Lock body and show modal
         const scrollY = window.scrollY;
         document.body.classList.add('modal-open');
         document.body.style.top = `-${scrollY}px`;
         
-        elements.replyModal.style.display = 'flex';
-        elements.replyModal.style.position = 'fixed';
-        elements.replyModal.style.top = '0';
-        elements.replyModal.style.left = '0';
-        elements.replyModal.style.right = '0';
-        elements.replyModal.style.bottom = '0';
-        elements.replyModal.style.zIndex = '999999999';
-        elements.replyModal.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
-        elements.replyModal.style.backdropFilter = 'blur(12px)';
+        elements.replyModal.style.cssText = 'display:flex;position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999999;background:rgba(0,0,0,0.95);backdrop-filter:blur(12px);';
         
         // Focus the input
         setTimeout(() => {
@@ -409,71 +392,113 @@ const ChatModule = (function() {
                 elements.replyInput.focus();
             }
         }, 200);
-        
-        console.log('Reply modal opened with replyToId:', messageId, 'imageUrl:', imageUrl);
     };
 
-    const sendReply = async () => {
-        const replyText = elements.replyInput?.value.trim();
-        if (!replyText) {
-            console.log('No reply text');
-            return;
+// REPLACE the sendReply function in chat.js with this:
+
+const sendReply = async () => {
+    console.log('🟢 sendReply called');
+    
+    const replyText = elements.replyInput?.value?.trim();
+    console.log('Reply text:', replyText);
+    
+    if (!replyText) {
+        console.log('No reply text, exiting');
+        return;
+    }
+    
+    const replyData = window.__replyData || (appState ? { 
+        messageId: appState.replyingTo, 
+        imageUrl: appState.replyingToImage 
+    } : null);
+    
+    console.log('Reply data:', replyData);
+    
+    if (!replyData?.messageId) {
+        console.log('No messageId in reply data');
+        return;
+    }
+    
+    // Store the reply info for sendMessage to use
+    window.__tempReplyTo = replyData.messageId;
+    window.__tempReplyToImage = replyData.imageUrl;
+    
+    console.log('Set __tempReplyTo:', window.__tempReplyTo);
+    console.log('Set __tempReplyToImage:', window.__tempReplyToImage);
+    
+    // Clear the reply data
+    if (appState) {
+        appState.replyingTo = null;
+        appState.replyingToImage = null;
+    }
+    window.__replyData = null;
+    
+    // Set the message input value
+    if (elements.messageInput) {
+        elements.messageInput.value = replyText;
+        console.log('Set message input value to:', replyText);
+    } else {
+        console.error('messageInput element not found!');
+        // Try to get it by ID
+        const msgInput = document.getElementById('messageInput');
+        if (msgInput) {
+            msgInput.value = replyText;
+            elements.messageInput = msgInput;
         }
-        
-        const replyToId = window.__tempReplyTo || appState?.replyingTo;
-        const replyToImage = window.__tempReplyToImage || appState?.replyingToImage;
-        
-        if (!replyToId) {
-            console.error('No replyToId found!');
-            alert('Cannot reply: Original message not found');
-            return;
+    }
+    
+    // Close the modal and restore scroll
+    if (elements.replyModal) {
+        elements.replyModal.style.display = 'none';
+        document.body.classList.remove('modal-open');
+        document.body.style.top = '';
+    }
+    
+    // Disable send button temporarily
+    if (elements.sendReplyBtn) {
+        elements.sendReplyBtn.disabled = true;
+    }
+    
+    // Focus and wait a moment
+    if (elements.messageInput) {
+        elements.messageInput.focus();
+    }
+    await new Promise(r => setTimeout(r, 100));
+    
+    // Send the message
+    if (typeof window.sendMessage === 'function') {
+        console.log('Calling window.sendMessage...');
+        await window.sendMessage();
+        console.log('window.sendMessage completed');
+    } else {
+        console.error('window.sendMessage is not defined!');
+    }
+    
+    // Clean up
+    window.__tempReplyTo = null;
+    window.__tempReplyToImage = null;
+    
+    // Clear the input
+    if (elements.messageInput) {
+        elements.messageInput.value = '';
+    }
+    
+    // Re-enable send button
+    if (elements.sendReplyBtn) {
+        setTimeout(() => {
+            if (elements.sendReplyBtn) {
+                elements.sendReplyBtn.disabled = false;
+            }
+        }, 500);
+    }
+    
+    // Scroll to bottom
+    setTimeout(() => {
+        if (elements.chatMessages) {
+            elements.chatMessages.scrollTo({ top: elements.chatMessages.scrollHeight, behavior: 'smooth' });
         }
-        
-        console.log('Sending reply to:', replyToId, 'with image:', replyToImage);
-        
-        // Set the message input value
-        if (elements.messageInput) {
-            elements.messageInput.value = replyText;
-        }
-        
-        // Close modal
-        if (elements.replyModal) {
-            elements.replyModal.style.display = 'none';
-            document.body.classList.remove('modal-open');
-            document.body.style.top = '';
-        }
-        
-        // Clear reply data
-        const tempReplyTo = window.__tempReplyTo;
-        const tempReplyToImage = window.__tempReplyToImage;
-        window.__tempReplyTo = null;
-        window.__tempReplyToImage = null;
-        if (appState) {
-            appState.replyingTo = null;
-            appState.replyingToImage = null;
-        }
-        
-        // Send the message
-        if (typeof window.sendMessage === 'function') {
-            // Store the reply info one more time right before sending
-            window.__tempReplyTo = tempReplyTo;
-            window.__tempReplyToImage = tempReplyToImage;
-            
-            await window.sendMessage();
-            
-            // Clear again after send
-            window.__tempReplyTo = null;
-            window.__tempReplyToImage = null;
-        }
-        
-        // Clear input
-        if (elements.messageInput) {
-            elements.messageInput.value = '';
-            elements.messageInput.focus();
-        }
-        
-        console.log('Reply sent successfully');
-    };
+    }, 200);
+};
 
     const editMessage = async (messageId) => {
         closeMessageActions();
@@ -583,84 +608,79 @@ const ChatModule = (function() {
     };
 
     const setupEventListeners = () => {
-        // Handle reply button clicks via delegation
         const handleReplyClick = (e) => {
             const btn = e.target.closest('.reply-btn');
             if (btn) {
                 e.preventDefault();
-                e.stopPropagation();
-                const messageId = btn.dataset.messageId;
-                const sender = btn.dataset.sender;
-                const messageText = btn.dataset.messageText;
-                console.log('Reply button clicked:', { messageId, sender, messageText });
-                openReplyModal(messageId, sender, messageText);
+                openReplyModal(btn.dataset.messageId, btn.dataset.sender, btn.dataset.messageText);
             }
         };
-        
         document.addEventListener('click', handleReplyClick);
         document.addEventListener('touchstart', handleReplyClick, { passive: false });
         
-        // Chat scroll handler
         if (elements.chatMessages) {
-            elements.chatMessages.addEventListener('scroll', () => {
-                if (scrollTimeout) clearTimeout(scrollTimeout);
-                scrollTimeout = setTimeout(() => {}, 100);
+            elements.chatMessages.addEventListener('scroll', () => { 
+                if (scrollTimeout) clearTimeout(scrollTimeout); 
+                scrollTimeout = setTimeout(() => {}, 100); 
             }, { passive: true });
         }
         
-        // Send reply button
+        // ========== FIXED SEND REPLY BUTTON HANDLER ==========
         if (elements.sendReplyBtn) {
-            const newBtn = elements.sendReplyBtn.cloneNode(true);
-            elements.sendReplyBtn.parentNode.replaceChild(newBtn, elements.sendReplyBtn);
-            elements.sendReplyBtn = newBtn;
+            // Remove any existing listeners by cloning
+            const newSendBtn = elements.sendReplyBtn.cloneNode(true);
+            elements.sendReplyBtn.parentNode.replaceChild(newSendBtn, elements.sendReplyBtn);
+            elements.sendReplyBtn = newSendBtn;
             
-            let processing = false;
-            const handleSend = async (e) => {
+            let isProcessing = false;
+            
+            const handleSendReply = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (processing) return;
-                processing = true;
-                try {
-                    await sendReply();
-                } finally {
-                    setTimeout(() => { processing = false; }, 1000);
+                
+                console.log('Send reply button clicked');
+                
+                if (isProcessing) {
+                    console.log('Already processing, skipping');
+                    return;
                 }
+                
+                isProcessing = true;
+                sendReply().finally(() => {
+                    setTimeout(() => {
+                        isProcessing = false;
+                    }, 1000);
+                });
             };
             
-            elements.sendReplyBtn.addEventListener('click', handleSend);
-            elements.sendReplyBtn.addEventListener('touchstart', handleSend, { passive: false });
+            elements.sendReplyBtn.addEventListener('click', handleSendReply);
+            elements.sendReplyBtn.addEventListener('touchstart', handleSendReply, { passive: false });
         }
+        // ========== END FIXED HANDLER ==========
         
-        // Close reply modal buttons
         if (elements.closeReplyModal) {
-            const closeModal = () => {
-                if (elements.replyModal) {
-                    elements.replyModal.style.display = 'none';
-                    document.body.classList.remove('modal-open');
-                    document.body.style.top = '';
-                    if (appState) appState.replyingTo = null;
-                    window.__tempReplyTo = null;
-                    window.__tempReplyToImage = null;
-                }
+            const closeModal = () => { 
+                if (elements.replyModal) { 
+                    elements.replyModal.style.display = 'none'; 
+                    document.body.classList.remove('modal-open'); 
+                    document.body.style.top = ''; 
+                    if (appState) appState.replyingTo = null; 
+                } 
             };
             elements.closeReplyModal.addEventListener('click', closeModal);
-            elements.closeReplyModal.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                closeModal();
+            elements.closeReplyModal.addEventListener('touchstart', (e) => { 
+                e.preventDefault(); 
+                closeModal(); 
             }, { passive: false });
         }
         
-        // Click outside modal to close
         if (elements.replyModal) {
-            elements.replyModal.addEventListener('click', (e) => {
-                if (e.target === elements.replyModal) {
-                    elements.replyModal.style.display = 'none';
-                    document.body.classList.remove('modal-open');
-                    document.body.style.top = '';
-                    if (appState) appState.replyingTo = null;
-                    window.__tempReplyTo = null;
-                    window.__tempReplyToImage = null;
-                }
+            elements.replyModal.addEventListener('click', (e) => { 
+                if (e.target === elements.replyModal) { 
+                    elements.replyModal.style.display = 'none'; 
+                    document.body.classList.remove('modal-open'); 
+                    if (appState) appState.replyingTo = null; 
+                } 
             });
         }
     };
