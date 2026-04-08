@@ -544,14 +544,17 @@ header {
 .message-time { opacity: 0.7; }
 
 .message-action-dots {
+    opacity: 0.7 !important;
     background: transparent;
     border: none;
     color: currentColor;
     cursor: pointer;
     padding: var(--spacing-xs);
     border-radius: var(--radius-sm);
-    opacity: 0;
     transition: opacity var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .message:hover .message-action-dots { opacity: 0.7; }
@@ -1801,8 +1804,8 @@ header {
     }
     
     .message-action-dots {
-        opacity: 0.7;
-        padding: 6px;
+        opacity: 0.8 !important;
+        padding: 8px;
         font-size: 1rem;
     }
     
