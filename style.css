@@ -636,11 +636,6 @@ header {
     text-overflow: ellipsis;
 }
 
-/* Delete or comment this line if it exists */
-.reaction-emoji-btn:hover {
-    transform: scale(1.1);  /* DELETE THIS */
-}
-
 /* Message Reactions Display */
 .message-reactions {
     display: flex;
@@ -770,7 +765,6 @@ header {
 }
 
 /* ========== TYPING INDICATOR ========== */
-/* Typing Indicator */
 .typing-indicator {
     padding: var(--spacing-sm) var(--spacing-lg);
     font-size: 0.9rem;
@@ -1818,9 +1812,7 @@ header {
         border-radius: 20px;
     }
     
-    /* Mobile Message Actions Menu - ------------------------ Compact Bottom Strip */
-/* Mobile Message Actions Menu - Compact Bottom Strip */
-@media (max-width: 768px) {
+    /* Mobile Message Actions Menu - Compact Bottom Strip */
     .message-actions-menu {
         position: fixed !important;
         bottom: 0 !important;
@@ -1928,7 +1920,6 @@ header {
         padding: 4px 8px !important;
         margin: 0 !important;
     }
-}
     
     .reaction-quick-picker {
         display: grid;
