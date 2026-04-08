@@ -779,6 +779,8 @@ function showSendError() {
 // ============================================
 
 // Replace the loadChatHistory function in app.js
+// In app.js, update the loadChatHistory function - around line 800-860
+
 async function loadChatHistory(sessionId = null, limit = 50) {
     const targetId = sessionId || appState.currentSessionId;
     if (!targetId) return;
@@ -834,10 +836,10 @@ async function loadChatHistory(sessionId = null, limit = 50) {
             reactionsMap.get(r.message_id).push(r);
         });
         
+        // Use ChatModule to display messages - NO LEGACY FUNCTION
         orderedMessages.forEach(msg => {
             const messageType = msg.sender_id === appState.userId ? 'sent' : 'received';
             
-            // Use ChatModule to display each message with proper formatting including action dots
             if (window.ChatModule && typeof window.ChatModule.displayMessage === 'function') {
                 window.ChatModule.displayMessage({
                     id: msg.id,
@@ -851,8 +853,7 @@ async function loadChatHistory(sessionId = null, limit = 50) {
                     reply_to: msg.reply_to
                 });
             } else {
-                // Fallback display method
-                displayMessageLegacy(msg, messageType, reactionsMap.get(msg.id) || [], !!sessionId);
+                console.warn('ChatModule not ready yet, message will be loaded later');
             }
         });
         
