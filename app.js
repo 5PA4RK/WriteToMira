@@ -530,6 +530,7 @@ function updateUIForPendingGuest() {
 
 let isSendingMessage = false;
 
+// Replace the sendMessage function in app.js
 async function sendMessage() {
     if (isSendingMessage || !appState.isConnected || appState.isViewingHistory) return;
     
@@ -541,13 +542,18 @@ async function sendMessage() {
     const sendBtn = elements.sendMessageBtn;
     if (sendBtn) sendBtn.disabled = true;
     
-    // Get reply data
-    const replyToId = appState.replyingTo;
-    let replyToImage = null;
-    if (replyToId && appState.messages) {
-        const originalMsg = appState.messages.find(m => m.id === replyToId);
-        if (originalMsg) replyToImage = originalMsg._realImageUrl || originalMsg.image;
+    // Get reply data - CHECK BOTH SOURCES
+    let replyToId = appState.replyingTo;
+    let replyToImage = appState.replyingToImage;
+    
+    // Also check for temp reply from modal
+    if (!replyToId && window.__tempReplyTo) {
+        replyToId = window.__tempReplyTo;
+        replyToImage = window.__tempReplyToImage;
+        console.log('Using __tempReplyTo:', replyToId);
     }
+    
+    console.log('Sending message with reply_to:', replyToId);
     
     // Clear inputs
     const originalText = messageText;
@@ -555,16 +561,53 @@ async function sendMessage() {
     elements.messageInput.value = '';
     elements.messageInput.style.height = 'auto';
     if (elements.imageUpload) elements.imageUpload.value = '';
-    appState.replyingTo = null;
-    window.pendingImageFile = null;
     
-    // Create optimistic message
+    // Clear reply data
+    appState.replyingTo = null;
+    appState.replyingToImage = null;
+    window.__tempReplyTo = null;
+    window.__tempReplyToImage = null;
+    window.__replyData = null;
+    
+    // Remove reply reference display if exists
+    const replyRefContainer = document.getElementById('replyReferenceContainer');
+    if (replyRefContainer) replyRefContainer.style.display = 'none';
+    
+    // Get original message details for optimistic display
+    let originalSender = '';
+    let originalTextPreview = '';
+    let originalImageUrl = null;
+    
+    if (replyToId) {
+        // Try to find original message in DOM
+        const originalMsgEl = document.getElementById(`msg-${replyToId}`);
+        if (originalMsgEl) {
+            const senderEl = originalMsgEl.querySelector('.message-sender');
+            const textEl = originalMsgEl.querySelector('.message-text');
+            const imgEl = originalMsgEl.querySelector('.message-image');
+            originalSender = senderEl?.textContent || 'Someone';
+            originalTextPreview = textEl?.textContent?.substring(0, 100) || '';
+            if (imgEl?.src) originalImageUrl = imgEl.src;
+        } else if (appState.messages) {
+            const originalMsg = appState.messages.find(m => m.id === replyToId);
+            if (originalMsg) {
+                originalSender = originalMsg.sender;
+                originalTextPreview = originalMsg.text?.substring(0, 100) || '';
+                originalImageUrl = originalMsg._realImageUrl || originalMsg.image;
+            }
+        }
+        if (replyToImage) originalImageUrl = replyToImage;
+    }
+    
+    // Create optimistic message with reply reference
     const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
     let localPreview = originalFile ? URL.createObjectURL(originalFile) : null;
     
-    const messageDiv = createOptimisticMessage(tempId, appState.userName, originalText, localPreview, replyToId, replyToImage);
+    const messageDiv = createOptimisticMessage(tempId, appState.userName, originalText, localPreview, replyToId, originalSender, originalTextPreview, originalImageUrl);
     elements.chatMessages.appendChild(messageDiv);
     scrollToBottom();
+    
+    window.pendingImageFile = null;
     
     try {
         let finalImageUrl = null;
@@ -577,15 +620,22 @@ async function sendMessage() {
             const realMsg = document.getElementById(`msg-${tempId}`);
             if (realMsg) {
                 realMsg.id = `msg-${result.data.id}`;
-                // Update action buttons with real ID
                 const actionsMenu = document.getElementById(`actions-${tempId}`);
                 if (actionsMenu) actionsMenu.id = `actions-${result.data.id}`;
             }
             
             appState.messages.push({
-                id: result.data.id, sender: appState.userName, text: originalText,
-                image: finalImageUrl, time: new Date().toLocaleTimeString(),
-                type: 'sent', reply_to: replyToId, _realImageUrl: finalImageUrl
+                id: result.data.id,
+                sender: appState.userName,
+                text: originalText,
+                image: finalImageUrl,
+                time: new Date().toLocaleTimeString(),
+                type: 'sent',
+                reply_to: replyToId,
+                reply_to_sender: originalSender,
+                reply_to_text: originalTextPreview,
+                reply_to_image: originalImageUrl,
+                _realImageUrl: finalImageUrl
             });
         } else {
             messageDiv.remove();
@@ -602,6 +652,49 @@ async function sendMessage() {
         if (sendBtn) sendBtn.disabled = false;
         if (localPreview) URL.revokeObjectURL(localPreview);
     }
+}
+
+// Update createOptimisticMessage function
+function createOptimisticMessage(id, sender, text, imageUrl, replyToId, originalSender, originalTextPreview, originalImageUrl) {
+    const div = document.createElement('div');
+    div.className = 'message sent optimistic';
+    div.id = `msg-${id}`;
+    
+    let content = `<div class="message-sender">${escapeHtml(sender)}</div><div class="message-content">`;
+    
+    // Add reply reference if this is a reply
+    if (replyToId && originalSender) {
+        const displayText = originalTextPreview ? 
+            (originalTextPreview.length > 60 ? originalTextPreview.substring(0, 60) + '...' : originalTextPreview) : 
+            (originalImageUrl ? '[Image]' : 'Message');
+        
+        const imageHtml = originalImageUrl ? 
+            `<div class="reply-image-preview">
+                <img src="${originalImageUrl}" style="max-width:30px;max-height:30px;border-radius:4px;object-fit:cover;" 
+                     onclick="event.stopPropagation(); window.showFullImage('${originalImageUrl}')">
+                <div class="preview-tooltip"><img src="${originalImageUrl}" alt="preview"></div>
+            </div>` : '';
+        
+        content += `<div class="message-reply-ref" onclick="window.scrollToMessage && window.scrollToMessage('${replyToId}')">
+            <i class="fas fa-reply"></i>
+            <div class="reply-content">
+                <strong>${escapeHtml(originalSender)}</strong>
+                <span>${escapeHtml(displayText)}</span>
+                ${originalImageUrl && !originalTextPreview ? '<i class="fas fa-image"></i>' : ''}
+            </div>
+            ${imageHtml}
+        </div>`;
+    }
+    
+    if (text) content += `<div class="message-text">${escapeHtml(text).replace(/\n/g, '<br>')}</div>`;
+    if (imageUrl) content += `<img src="${imageUrl}" class="message-image" style="max-width: 100%; max-height: 250px; border-radius: 8px;" onclick="window.showFullImage('${imageUrl}')">`;
+    
+    content += `<div class="message-footer"><div class="message-time">${new Date().toLocaleTimeString()}</div><button class="message-action-dots" onclick="window.toggleMessageActions('${id}', this)"><i class="fas fa-ellipsis-v"></i></button></div></div></div>`;
+    div.innerHTML = content;
+    div.style.opacity = '0.7';
+    
+    setTimeout(() => { if (div) div.style.opacity = '1'; }, 100);
+    return div;
 }
 
 function createOptimisticMessage(id, sender, text, imageUrl, replyToId, replyToImage) {
@@ -685,6 +778,7 @@ function showSendError() {
 // CHAT HISTORY
 // ============================================
 
+// Replace the loadChatHistory function in app.js
 async function loadChatHistory(sessionId = null, limit = 50) {
     const targetId = sessionId || appState.currentSessionId;
     if (!targetId) return;
@@ -698,7 +792,6 @@ async function loadChatHistory(sessionId = null, limit = 50) {
             .select('*').eq('session_id', targetId).eq('is_deleted', false)
             .order('created_at', { ascending: false }).limit(limit);
         
-        // Filter cleared messages for guests
         if (!appState.isHost && !sessionId) {
             const { data: cleared } = await supabaseClient.from('cleared_messages')
                 .select('message_id').eq('user_id', appState.userId).eq('session_id', targetId);
@@ -743,12 +836,24 @@ async function loadChatHistory(sessionId = null, limit = 50) {
         
         orderedMessages.forEach(msg => {
             const messageType = msg.sender_id === appState.userId ? 'sent' : 'received';
-            window.ChatModule?.displayMessage({
-                id: msg.id, sender: msg.sender_name, text: msg.message,
-                image: msg.image_url, time: new Date(msg.created_at).toLocaleTimeString(),
-                type: messageType, is_historical: !!sessionId,
-                reactions: reactionsMap.get(msg.id) || [], reply_to: msg.reply_to
-            });
+            
+            // Use ChatModule to display each message with proper formatting including action dots
+            if (window.ChatModule && typeof window.ChatModule.displayMessage === 'function') {
+                window.ChatModule.displayMessage({
+                    id: msg.id,
+                    sender: msg.sender_name,
+                    text: msg.message,
+                    image: msg.image_url,
+                    time: new Date(msg.created_at).toLocaleTimeString(),
+                    type: messageType,
+                    is_historical: !!sessionId,
+                    reactions: reactionsMap.get(msg.id) || [],
+                    reply_to: msg.reply_to
+                });
+            } else {
+                // Fallback display method
+                displayMessageLegacy(msg, messageType, reactionsMap.get(msg.id) || [], !!sessionId);
+            }
         });
         
         appState.messages = orderedMessages;
@@ -761,6 +866,60 @@ async function loadChatHistory(sessionId = null, limit = 50) {
             elements.chatMessages.innerHTML = `<div class="message received"><div class="message-sender">System</div><div class="message-content"><div class="message-text">Error loading messages.</div></div></div>`;
         }
     }
+}
+
+// Legacy fallback display function
+function displayMessageLegacy(msg, messageType, reactions, isHistorical) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${messageType}${isHistorical ? ' historical' : ''}`;
+    messageDiv.id = `msg-${msg.id}`;
+    
+    let content = '';
+    
+    if (msg.reply_to) {
+        content += `<div class="message-reply-ref" onclick="window.scrollToMessage('${msg.reply_to}')">
+            <i class="fas fa-reply"></i>
+            <div class="reply-content">Replying to message</div>
+        </div>`;
+    }
+    
+    if (msg.message && msg.message.trim()) {
+        content += `<div class="message-text" dir="auto">${escapeHtml(msg.message).replace(/\n/g, '<br>')}</div>`;
+    }
+    
+    if (msg.image_url) {
+        content += `<img src="${msg.image_url}" class="message-image" onclick="window.showFullImage('${msg.image_url}')" loading="lazy">`;
+    }
+    
+    // Make sure action dots are added
+    const actionBtn = `<button class="message-action-dots" onclick="window.toggleMessageActions('${msg.id}', this)"><i class="fas fa-ellipsis-v"></i></button>`;
+    const actionsMenu = ChatModule ? ChatModule.getActionsMenuHtml({ id: msg.id, sender: msg.sender_name, text: msg.message }) : '';
+    
+    messageDiv.innerHTML = `
+        <div class="message-sender">${escapeHtml(msg.sender_name)}</div>
+        <div class="message-content">
+            ${content}
+            <div class="message-reactions"></div>
+            <div class="message-footer">
+                <div class="message-time">${new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                ${actionBtn}
+            </div>
+        </div>
+        ${actionsMenu}
+    `;
+    
+    if (reactions && reactions.length) {
+        const counts = {};
+        reactions.forEach(r => counts[r.emoji] = (counts[r.emoji] || 0) + 1);
+        const reactionsDiv = messageDiv.querySelector('.message-reactions');
+        if (reactionsDiv) {
+            reactionsDiv.innerHTML = Object.entries(counts).map(([emoji, count]) => 
+                `<span class="reaction-badge" onclick="window.toggleReaction('${msg.id}', '${emoji}')">${emoji} ${count}</span>`
+            ).join('');
+        }
+    }
+    
+    elements.chatMessages.appendChild(messageDiv);
 }
 
 // ============================================
