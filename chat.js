@@ -2,15 +2,41 @@
 // Compatible with refined app.js
 
 const ChatModule = (function() {
-    // Private variables
     let appState = null;
     let supabaseClient = null;
     let elements = {};
-    
     const reactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "😡"];
     let scrollTimeout = null;
-    let activeActionsMenu = null;
 
+    const escapeHtml = (text) => {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    };
+    // ========== ADD THE getActionsMenuHtml METHOD HERE ==========
+    const getActionsMenuHtml = (message) => {
+        const isOwn = message.sender === (appState?.userName);
+        const isMobile = window.innerWidth <= 768;
+        const escapedText = (message.text || '').replace(/'/g, "\\'");
+        
+        return `<div class="message-actions-menu" id="actions-${message.id}" style="display:none;">
+            ${isMobile ? '<button class="close-actions-menu" onclick="window.ChatModule.closeMessageActions()" style="position:absolute;top:8px;right:8px;background:transparent;font-size:20px;"><i class="fas fa-times"></i></button>' : ''}
+            ${isOwn ? `<button onclick="window.editMessage('${message.id}')"><i class="fas fa-edit"></i> Edit</button>
+            <button onclick="window.deleteMessage('${message.id}')"><i class="fas fa-trash"></i> Delete</button>
+            <div class="menu-divider"></div>` : ''}
+            <button class="reply-btn" data-message-id="${message.id}" data-sender="${escapeHtml(message.sender)}" data-message-text="${escapedText}">
+                <i class="fas fa-reply"></i> Reply
+            </button>
+            <div class="menu-divider"></div>
+            <div class="reaction-section">
+                <div class="reaction-section-title"><i class="fas fa-smile"></i> Add Reaction</div>
+                <div class="reaction-quick-picker">
+                    ${reactionEmojis.map(emoji => `<button class="reaction-emoji-btn" onclick="window.addReaction('${message.id}', '${emoji}')">${emoji}</button>`).join('')}
+                </div>
+            </div>
+        </div>`;
+    };
     // Initialize
     function init(state, supabase, domElements) {
         appState = state;
@@ -456,6 +482,23 @@ const ChatModule = (function() {
             alert("Failed to delete message");
         }
     }
+    // Add this function to make reply references clickable
+window.scrollToMessage = function(messageId) {
+    const messageElement = document.getElementById(`msg-${messageId}`);
+    if (messageElement) {
+        messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Highlight the message temporarily
+        messageElement.style.transition = 'background-color 0.3s';
+        messageElement.style.backgroundColor = 'rgba(95, 176, 247, 0.3)';
+        setTimeout(() => {
+            messageElement.style.backgroundColor = '';
+        }, 2000);
+    } else {
+        console.log('Message not found:', messageId);
+    }
+};
+
+
 
     // Typing indicator
     function handleTyping() {
@@ -562,6 +605,8 @@ const ChatModule = (function() {
         return div.innerHTML;
     }
 
+    
+
     // Public API
     return {
         init,
@@ -570,14 +615,14 @@ const ChatModule = (function() {
         toggleMessageActions,
         closeMessageActions,
         addReaction,
-        toggleReaction,
+        toggleReaction: addReaction,
         getMessageReactions,
         openReplyModal,
         sendReply,
         editMessage,
         deleteMessage,
-        handleTyping,
-        escapeHtml
+        escapeHtml,
+        getActionsMenuHtml 
     };
 })();
 
